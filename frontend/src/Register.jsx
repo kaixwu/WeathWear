@@ -33,21 +33,26 @@ export default function Register() {
       setSuccess("Registration successful! Redirecting to login...")
       setTimeout(() => navigate("/login"), 1500)
     } catch (err) {
-      setError(err.response?.data?.error || "Registration failed. Please try again.")
+      if (err.response?.status === 429) {
+          setError("Too many registration attempts. Please wait.")
+      } else {
+          setError(err.response?.data?.error || "Registration failed. Please try again.")
+      }
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <h1 style={styles.logo}>☀️ SunWise</h1>
-        <p style={styles.sub}>Weather-Aware Tourist Destination Recommender</p>
-        <h2 style={styles.heading}>Create Account</h2>
+    <div className="auth-container">
+      <div className="auth-box glass-card" style={{ padding: "40px", textAlign: "center" }}>
+        <h1 className="font-heading" style={{ color: "var(--accent-blue)", fontSize: "2.5rem", marginBottom: "8px" }}>☀️ SunWise</h1>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.95rem", marginBottom: "32px", fontFamily: "var(--font-heading)" }}>Weather-Aware Tourist Destination Recommender</p>
+        
+        <h2 className="font-heading" style={{ color: "var(--text-main)", marginBottom: "24px", fontSize: "1.5rem" }}>Create Account</h2>
 
-        {error   && <p style={styles.error}>{error}</p>}
-        {success && <p style={styles.success}>{success}</p>}
+        {error   && <div style={{ background: "rgba(239, 68, 68, 0.1)", border: "1px solid var(--danger)", color: "var(--danger)", padding: "10px", borderRadius: "8px", marginBottom: "16px", fontSize: "0.85rem" }}>{error}</div>}
+        {success && <div style={{ background: "rgba(34, 197, 94, 0.1)", border: "1px solid var(--success)", color: "var(--success)", padding: "10px", borderRadius: "8px", marginBottom: "16px", fontSize: "0.85rem" }}>{success}</div>}
 
         {[
           { field: "username", placeholder: "Username",        type: "text" },
@@ -57,7 +62,7 @@ export default function Register() {
         ].map(({ field, placeholder, type }) => (
           <input
             key={field}
-            style={styles.input}
+            className="input-field"
             type={type}
             placeholder={placeholder}
             value={form[field]}
@@ -66,56 +71,23 @@ export default function Register() {
           />
         ))}
 
-        <p style={styles.hint}>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.78rem", marginBottom: "14px", lineHeight: "1.5", textAlign: "left" }}>
           Password must be 8 to 32 characters and include an uppercase letter, a number, and a special character.
         </p>
 
         <button
-          style={{ ...styles.btn, opacity: loading ? 0.7 : 1 }}
+          className="btn-primary"
           onClick={handleRegister}
           disabled={loading}
+          style={{ opacity: loading ? 0.7 : 1 }}
         >
           {loading ? "Registering..." : "Register"}
         </button>
 
-        <p style={styles.footer}>
-          Already have an account?{" "}
-          <Link to="/login" style={styles.link}>Log in here</Link>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginTop: "24px" }}>
+          Already have an account? <Link to="/login" style={{ color: "var(--accent-teal)", textDecoration: "none", fontWeight: "600" }}>Log in here</Link>
         </p>
       </div>
     </div>
   )
-}
-
-const styles = {
-  page: {
-    minHeight: "100vh", background: "#0b1120",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    padding: "20px", fontFamily: "Outfit, Arial, sans-serif"
-  },
-  card: {
-    background: "#161f35", borderRadius: "16px",
-    padding: "40px 32px", width: "100%", maxWidth: "400px",
-    border: "1px solid #1e2d4a"
-  },
-  logo:    { color: "#f59e0b", fontSize: "1.8rem", margin: "0 0 4px" },
-  sub:     { color: "#64748b", fontSize: "0.85rem", margin: "0 0 28px" },
-  heading: { color: "#f0f4ff", fontSize: "1.3rem", margin: "0 0 20px" },
-  input: {
-    width: "100%", padding: "11px 14px", marginBottom: "12px",
-    background: "#1c2a45", border: "1px solid #2a3a5c",
-    borderRadius: "10px", color: "#f0f4ff", fontSize: "0.95rem",
-    fontFamily: "Outfit, Arial, sans-serif", boxSizing: "border-box", outline: "none"
-  },
-  hint:    { color: "#64748b", fontSize: "0.78rem", marginBottom: "14px", lineHeight: "1.5" },
-  btn: {
-    width: "100%", padding: "13px", background: "#f59e0b",
-    color: "#0b1120", border: "none", borderRadius: "10px",
-    fontWeight: "700", fontSize: "1rem", cursor: "pointer",
-    fontFamily: "Outfit, Arial, sans-serif", marginTop: "4px"
-  },
-  error:   { color: "#f87171", fontSize: "0.85rem", marginBottom: "12px" },
-  success: { color: "#4ade80", fontSize: "0.85rem", marginBottom: "12px" },
-  footer:  { color: "#64748b", fontSize: "0.85rem", marginTop: "20px", textAlign: "center" },
-  link:    { color: "#f59e0b", textDecoration: "none" }
 }
