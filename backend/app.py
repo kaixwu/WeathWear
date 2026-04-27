@@ -695,6 +695,9 @@ def get_route():
             return jsonify(resp.json()), 200
         return jsonify({"error": "Failed to fetch route"}), 400
     except Exception as e:
+        import traceback
+        print("❌ Route error:")
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/itineraries", methods=["GET", "POST"])
