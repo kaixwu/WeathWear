@@ -729,5 +729,16 @@ def handle_itineraries():
         })
     return jsonify(results), 200
 
+@app.route("/api/itineraries/<int:itinerary_id>", methods=["DELETE"])
+@jwt_required()
+def delete_itinerary(itinerary_id):
+    user_id = get_jwt_identity()
+    itin = Itinerary.query.filter_by(id=itinerary_id, user_id=user_id).first()
+    if not itin:
+        return jsonify({"error": "Itinerary not found"}), 404
+    db.session.delete(itin)
+    db.session.commit()
+    return jsonify({"message": "Itinerary deleted"}), 200
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

@@ -3,7 +3,13 @@ import axios from "axios";
 import { useAuth } from "./AuthContext";
 import publicAxios from './publicAxios';
 
-
+const getLocalDateString = () => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 const DataContext = createContext();
 const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
@@ -12,7 +18,7 @@ export const useData = () => useContext(DataContext);
 
 export const DataProvider = ({ children }) => {
   const { token, role } = useAuth();
-  
+
   const [city, setCity] = useState("");
   const [weather, setWeather] = useState(null);
   const [forecast, setForecast] = useState([]);
@@ -20,13 +26,14 @@ export const DataProvider = ({ children }) => {
   const [disasters, setDisasters] = useState([]);
   const [places, setPlaces] = useState([]);
   const [currentCoords, setCurrentCoords] = useState(null);
-  
+
   const [loading, setLoading] = useState(false);
   const [placesLoading, setPlacesLoading] = useState(false);
   const [locationError, setLocationError] = useState(false);
 
   // Planner states
   const [todayPlan, setTodayPlan] = useState(null);
+  const [allItineraries, setAllItineraries] = useState([]);
 
   // Filters state
   const [envType, setEnvType] = useState("Any");
@@ -57,6 +64,26 @@ export const DataProvider = ({ children }) => {
     }
   };
 
+  const fetchItineraries = () => {
+    axios.get(`/api/itineraries`)
+      .then(res => {
+        setAllItineraries(res.data);
+        const todayStr = getLocalDateString();
+
+        // Get all today's itineraries and merge their places into one array
+        const todayPlans = res.data.filter(it => it.date_str === todayStr);
+        const mergedPlaces = todayPlans.flatMap(it => it.places);   // all places from all today plans
+
+        // Build a single "todayPlan" object for the Home card
+        if (mergedPlaces.length > 0) {
+          setTodayPlan({ date_str: todayStr, places: mergedPlaces });
+        } else {
+          setTodayPlan(null);
+        }
+      })
+      .catch(err => console.error("Itinerary fetch error:", err));
+  };
+
   const fetcheverything = async (lat, lon, searchRadius = radius) => {
     setLoading(true);
     setLocationError(false);
@@ -64,7 +91,7 @@ export const DataProvider = ({ children }) => {
       const wRes = await publicAxios.get(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`);
       setWeather(wRes.data);
       setCity(wRes.data.name);
-      
+
       const fRes = await publicAxios.get(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`);
       const uniqueDays = [];
       const dailyData = [];
@@ -85,7 +112,7 @@ export const DataProvider = ({ children }) => {
 
       setCurrentCoords({ lat, lon });
       isInitialFetchDone.current = true;
-      
+
       // Async fetch places in background
       fetchPlaces(lat, lon, wRes.data, searchRadius, prefType, envType);
 
@@ -99,14 +126,8 @@ export const DataProvider = ({ children }) => {
 
   useEffect(() => {
     if (!token || role === "admin" || isInitialFetchDone.current) return;
-    
-    // Fetch today's plan
-    axios.get(`/api/itineraries`)
-      .then(res => {
-        const todayStr = new Date().toISOString().split("T")[0];
-        const todaysItin = res.data.find(it => it.date_str === todayStr);
-        setTodayPlan(todaysItin || null);
-      }).catch(err => console.error(err));
+
+    fetchItineraries();
 
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => fetcheverything(coords.latitude, coords.longitude, radius),
@@ -129,7 +150,9 @@ export const DataProvider = ({ children }) => {
     city, weather, forecast, fullForecast, disasters, places, currentCoords,
     loading, placesLoading, locationError, setLocationError, fetcheverything,
     envType, setEnvType, prefType, setPrefType, radius, setRadius,
-    todayPlan, setTodayPlan
+    todayPlan, setTodayPlan,
+    allItineraries,
+    refreshItineraries: fetchItineraries,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

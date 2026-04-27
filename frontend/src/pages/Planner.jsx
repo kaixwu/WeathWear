@@ -2,16 +2,25 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { useAuth } from "../AuthContext";
 import { useData } from "../DataContext";
-import { Calendar, Clock, MapPin, Search, Plus, Trash2, ArrowUp, ArrowDown, Bot, CalendarCheck, Zap } from "lucide-react";
+import {
+  Calendar, Clock, MapPin, Plus, Trash2, ArrowUp, ArrowDown,
+  CalendarCheck, Zap, ListTodo, X, Check
+} from "lucide-react";
 
-
+const getLocalDateString = () => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 export default function Planner() {
   const { token } = useAuth();
-  const { weather, setTodayPlan } = useData();
+  const { weather, allItineraries, refreshItineraries } = useData();
   const [savedPlaces, setSavedPlaces] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [schedule, setSchedule] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
@@ -20,6 +29,9 @@ export default function Planner() {
 
   const [dateStr, setDateStr] = useState("");
   const [timeStr, setTimeStr] = useState("");
+
+  // Tabs: 'today' or 'upcoming'
+  const [activeTab, setActiveTab] = useState('today');
 
   const fetchSavedPlaces = async () => {
     setLoading(true);
@@ -34,7 +46,9 @@ export default function Planner() {
   };
 
   useEffect(() => {
-    if (token) fetchSavedPlaces();
+    if (token) {
+      fetchSavedPlaces();
+    }
   }, [token]);
 
   const removeSavedPlace = async (id) => {
@@ -80,22 +94,30 @@ export default function Planner() {
     setValidationResult(null);
   };
 
-  const saveScheduleToDB = async (finalDate, timeStr, scheduleToSave, isToday) => {
+  const deleteItinerary = async (id) => {
+    try {
+      await axios.delete(`/api/itineraries/${id}`);
+      refreshItineraries();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete itinerary.");
+    }
+  };
+
+  const saveScheduleToDB = async (finalDate, timeStr, scheduleToSave) => {
     try {
       await axios.post("/api/itineraries", {
         date_str: finalDate,
         time_str: timeStr,
         places: scheduleToSave
       });
-      
-      const todayStr = new Date().toISOString().split("T")[0];
-      if (finalDate === todayStr) {
-        setTodayPlan({ date_str: finalDate, places: scheduleToSave });
-      }
-      
+      refreshItineraries();
       alert("Schedule Confirmed & Saved!");
       setShowValidation(false);
       setPendingScheduleType(null);
+      setSchedule([]);
+      setDateStr("");
+      setTimeStr("");
     } catch (err) {
       console.error(err);
       alert("Failed to confirm schedule.");
@@ -104,7 +126,7 @@ export default function Planner() {
 
   const handleInitiateValidation = async (isToday) => {
     if (!schedule.length) return;
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = getLocalDateString();
     const finalDate = isToday ? todayStr : dateStr;
 
     if (!finalDate) {
@@ -116,26 +138,23 @@ export default function Planner() {
     setAiLoading(true);
 
     try {
-      const weatherData = weather ? { 
-        temp: weather.main.temp, 
-        rain_prob: weather.rain ? 100 : 0 
-      } : { temp: 30, rain_prob: 0 };
-      
+      const weatherData = weather
+        ? { temp: weather.main.temp, rain_prob: weather.rain ? 100 : 0 }
+        : { temp: 30, rain_prob: 0 };
+
       const res = await axios.post("/api/validate-schedule", {
         places: schedule,
         weather: weatherData,
         date_str: finalDate,
-        time_str: timeStr
+        time_str: timeStr,
       });
-      
+
       const valText = res.data.validation || "";
       if (valText.startsWith("[APPROVED]")) {
-        const cleanFeedback = valText.replace("[APPROVED]", "").trim();
-        setValidationResult(cleanFeedback);
-        await saveScheduleToDB(finalDate, timeStr, schedule, isToday);
+        setValidationResult(valText.replace("[APPROVED]", "").trim());
+        await saveScheduleToDB(finalDate, timeStr, schedule);
       } else {
-        const cleanFeedback = valText.replace("[WARNING]", "").trim();
-        setValidationResult(cleanFeedback);
+        setValidationResult(valText.replace("[WARNING]", "").trim());
         setShowValidation(true);
       }
     } catch (err) {
@@ -149,30 +168,141 @@ export default function Planner() {
 
   const handleFinalSave = () => {
     const isToday = pendingScheduleType === 'today';
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = getLocalDateString();
     const finalDate = isToday ? todayStr : dateStr;
-    saveScheduleToDB(finalDate, timeStr, schedule, isToday);
+    saveScheduleToDB(finalDate, timeStr, schedule);
   };
 
+  const upcomingItineraries = allItineraries.filter(it => it.date_str >= getLocalDateString());
+  const todayItineraries = allItineraries.filter(it => it.date_str === getLocalDateString());
 
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px 40px" }}>
       <div style={{ marginBottom: "32px", display: "flex", alignItems: "center", gap: "12px" }}>
         <CalendarCheck size={32} color="var(--accent-blue)" />
-        <div>
-          <h1 className="font-heading" style={{ color: "var(--accent-blue)", fontSize: "2rem", marginBottom: "4px" }}>Your Planner</h1>
-          <p style={{ color: "var(--text-muted)", margin: 0 }}>Select from your saved places to build a schedule.</p>
-        </div>
+        <h1 className="font-heading" style={{ color: "var(--accent-blue)", fontSize: "2rem", margin: 0 }}>
+          Your Planner
+        </h1>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "32px", alignItems: "flex-start" }}>
-        
-        {/* Left Column: Saved Places */}
+      {/* Toggle Tabs */}
+      <div style={{ display: "flex", borderBottom: "2px solid var(--glass-border)", marginBottom: "24px" }}>
+        <button
+          onClick={() => setActiveTab('today')}
+          style={{
+            flex: 1,
+            padding: "12px 0",
+            background: "transparent",
+            border: "none",
+            borderBottom: activeTab === 'today' ? "3px solid var(--accent-blue)" : "3px solid transparent",
+            color: activeTab === 'today' ? "var(--accent-blue)" : "var(--text-muted)",
+            fontWeight: "700",
+            fontSize: "1.1rem",
+            cursor: "pointer",
+            transition: "0.2s"
+          }}
+        >
+          Today’s Plan
+          {todayItineraries.length > 0 && (
+            <span style={{ marginLeft: "8px", background: "var(--accent-blue)", color: "#fff", padding: "2px 8px", borderRadius: "20px", fontSize: "0.75rem" }}>
+              {todayItineraries.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('upcoming')}
+          style={{
+            flex: 1,
+            padding: "12px 0",
+            background: "transparent",
+            border: "none",
+            borderBottom: activeTab === 'upcoming' ? "3px solid var(--accent-teal)" : "3px solid transparent",
+            color: activeTab === 'upcoming' ? "var(--accent-teal)" : "var(--text-muted)",
+            fontWeight: "700",
+            fontSize: "1.1rem",
+            cursor: "pointer",
+            transition: "0.2s"
+          }}
+        >
+          Upcoming
+          {upcomingItineraries.length > 0 && (
+            <span style={{ marginLeft: "8px", background: "var(--accent-teal)", color: "#000", padding: "2px 8px", borderRadius: "20px", fontSize: "0.75rem" }}>
+              {upcomingItineraries.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'today' ? (
+        <div>
+          {todayItineraries.length === 0 ? (
+            <div className="glass-card" style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
+              No plan scheduled for today. Build one below!
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+              {todayItineraries.map(it => (
+                <div key={it.id} className="glass-card" style={{ flex: "1 1 300px", padding: "16px", minWidth: "280px" }}>
+                  <div style={{ fontWeight: "700", fontSize: "1.1rem", marginBottom: "8px" }}>
+                    {it.date_str} {it.time_str && `at ${it.time_str}`}
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: "20px", color: "#e2e8f0" }}>
+                    {it.places.map((p, idx) => (
+                      <li key={idx} style={{ marginBottom: "4px" }}>{p.name} ({p.category})</li>
+                    ))}
+                  </ul>
+                  <button
+                    onClick={() => deleteItinerary(it.id)}
+                    style={{ marginTop: "12px", padding: "4px 8px", background: "transparent", border: "1px solid var(--danger)", color: "var(--danger)", borderRadius: "4px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                  >
+                    <Trash2 size={14} /> Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div>
+          {upcomingItineraries.length === 0 ? (
+            <div className="glass-card" style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
+              No upcoming plans yet.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+              {upcomingItineraries.map(it => (
+                <div key={it.id} className="glass-card" style={{ flex: "1 1 300px", padding: "16px", minWidth: "280px" }}>
+                  <div style={{ fontWeight: "700", fontSize: "1.1rem", marginBottom: "8px" }}>
+                    {it.date_str} {it.time_str && `at ${it.time_str}`}
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: "20px", color: "#e2e8f0" }}>
+                    {it.places.map((p, idx) => (
+                      <li key={idx} style={{ marginBottom: "4px" }}>{p.name} ({p.category})</li>
+                    ))}
+                  </ul>
+                  <button
+                    onClick={() => deleteItinerary(it.id)}
+                    style={{ marginTop: "12px", padding: "4px 8px", background: "transparent", border: "1px solid var(--danger)", color: "var(--danger)", borderRadius: "4px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                  >
+                    <Trash2 size={14} /> Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Schedule Builder Section (unchanged from before) */}
+      <div style={{ marginTop: "40px", display: "flex", flexWrap: "wrap", gap: "32px", alignItems: "flex-start" }}>
+        {/* Left: Saved Places */}
         <div style={{ flex: "1 1 400px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
             <MapPin size={24} />
             <h2 className="font-heading" style={{ fontSize: "1.3rem", margin: 0 }}>Saved Places</h2>
           </div>
+          {/* saved places list... (same as your original) */}
           {loading ? (
             <div className="skeleton" style={{ height: "200px" }}></div>
           ) : savedPlaces.length === 0 ? (
@@ -208,10 +338,9 @@ export default function Planner() {
           )}
         </div>
 
-        {/* Right Column: Schedule Builder */}
+        {/* Right: Schedule Builder */}
         <div style={{ flex: "1 1 500px" }}>
           <div className="glass-card" style={{ padding: "32px", border: "1px solid var(--accent-blue)" }}>
-            
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <Calendar size={24} />
@@ -223,7 +352,7 @@ export default function Planner() {
             <div style={{ display: "flex", gap: "16px", marginBottom: "24px", flexWrap: "wrap" }}>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "8px" }}>Schedule Date</label>
-                <input type="date" min={new Date().toISOString().split("T")[0]} value={dateStr} onChange={e => setDateStr(e.target.value)} className="input-field" style={{ width: "100%", marginBottom: 0 }} />
+                <input type="date" min={getLocalDateString()} value={dateStr} onChange={e => setDateStr(e.target.value)} className="input-field" style={{ width: "100%", marginBottom: 0 }} />
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "8px" }}>Time (Optional)</label>
@@ -246,9 +375,7 @@ export default function Planner() {
               <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "32px" }}>
                 {schedule.map((p, index) => (
                   <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "16px", padding: "16px", background: "rgba(255,255,255,0.03)", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "50%", background: "var(--accent-blue)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700" }}>
-                      {index + 1}
-                    </div>
+                    <div style={{ width: "30px", height: "30px", borderRadius: "50%", background: "var(--accent-blue)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700" }}>{index + 1}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: "700" }}>{p.name}</div>
                       <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{p.category}</div>
@@ -266,7 +393,7 @@ export default function Planner() {
             {!showValidation ? (
               <>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "12px", textAlign: "center" }}>
-                  Clicking Confirm or Go Today will trigger AI validation before finalizing your schedule.
+                  AI validation will check weather, date/time, and opening hours.
                 </p>
                 <div style={{ display: "flex", gap: "16px" }}>
                   <button onClick={() => handleInitiateValidation(false)} disabled={schedule.length === 0 || !dateStr || aiLoading} style={{ flex: 1, padding: "12px", background: "transparent", border: "1px solid var(--accent-blue)", color: "var(--accent-blue)", borderRadius: "8px", fontWeight: "700", cursor: "pointer" }}>
@@ -281,20 +408,14 @@ export default function Planner() {
               <div style={{ marginTop: "16px", padding: "16px", background: "rgba(0,0,0,0.3)", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)" }}>
                 <p style={{ margin: "0 0 16px 0", color: "#e2e8f0", fontSize: "0.95rem" }}>There are issues with this plan. Do you still want to save it?</p>
                 <div style={{ display: "flex", gap: "16px" }}>
-                  <button onClick={() => setShowValidation(false)} style={{ flex: 1, padding: "12px", background: "transparent", border: "1px solid var(--accent-blue)", color: "var(--accent-blue)", borderRadius: "8px", fontWeight: "700", cursor: "pointer" }}>
-                    Cancel & Edit Plan
-                  </button>
-                  <button onClick={handleFinalSave} style={{ flex: 1, padding: "12px", background: "var(--danger)", border: "none", color: "#fff", borderRadius: "8px", fontWeight: "700", cursor: "pointer" }}>
-                    Save Anyway
-                  </button>
+                  <button onClick={() => setShowValidation(false)} style={{ flex: 1, padding: "12px", background: "transparent", border: "1px solid var(--accent-blue)", color: "var(--accent-blue)", borderRadius: "8px", fontWeight: "700", cursor: "pointer" }}>Cancel & Edit Plan</button>
+                  <button onClick={handleFinalSave} style={{ flex: 1, padding: "12px", background: "var(--danger)", border: "none", color: "#fff", borderRadius: "8px", fontWeight: "700", cursor: "pointer" }}>Save Anyway</button>
                 </div>
               </div>
             )}
-
           </div>
         </div>
-        
       </div>
     </div>
   );
-}
+};
