@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { useAuth } from "./AuthContext";
 import { Link } from "react-router-dom";
-const API = "http://localhost:5000"
+
 
 
 
@@ -25,7 +25,7 @@ export default function Admin() {
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get(`${API}/admin/users`);
+      const res = await axios.get(`/admin/users`);
       setUsers(res.data);
     } catch (err) {
       console.error(err);
@@ -34,7 +34,7 @@ export default function Admin() {
 
   const fetchLogs = async () => {
     try {
-      const res = await axios.get(`${API}/admin/logs`);
+      const res = await axios.get(`/admin/logs`);
       setLogs(res.data);
     } catch (err) {
       console.error(err);
@@ -43,7 +43,7 @@ export default function Admin() {
 
   const toggleBan = async (id) => {
     try {
-      await axios.post(`${API}/admin/users/${id}/ban`, {});
+      await axios.post(`/admin/users/${id}/ban`, {});
       fetchUsers();
     } catch (err) {
       alert(err.response?.data?.error || "Error banning user");
@@ -53,7 +53,7 @@ export default function Admin() {
   const addDestination = async () => {
     setDestMsg("");
     try {
-      await axios.post(`${API}/admin/destinations`, destForm);
+      await axios.post(`/admin/destinations`, destForm);
       setDestMsg("Destination added successfully!");
       setDestForm({ name: "", lat: "", lon: "", type: "Outdoor", category: "Landmark" });
     } catch (err) {

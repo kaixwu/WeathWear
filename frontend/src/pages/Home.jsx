@@ -9,7 +9,8 @@ import L from 'leaflet';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-const API = "http://localhost:5000"
+import publicAxios from "../publicAxios";
+
 
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -45,7 +46,7 @@ export default function Home() {
     if (val.length > 2) {
       setShowSuggestions(true);
       try {
-        const res = await axios.get(`${API}/api/autocomplete?text=${val}&lat=${currentCoords?.lat}&lon=${currentCoords?.lon}`);
+        const res = await axios.get(`/api/autocomplete?text=${val}&lat=${currentCoords?.lat}&lon=${currentCoords?.lon}`);
         setSuggestions(res.data.suggestions || []);
       } catch (e) { console.error(e); }
     } else {
@@ -57,7 +58,7 @@ export default function Home() {
   const selectSuggestion = (sug) => {
     setManualCity(sug.formatted);
     setShowSuggestions(false);
-    axios.get(`https://nominatim.openstreetmap.org/search?q=${sug.formatted}&format=json&limit=1`)
+    publicAxios.get(`https://nominatim.openstreetmap.org/search?q=${sug.formatted}&format=json&limit=1`)
       .then(geoRes => {
         if (geoRes.data.length > 0) {
           const lat = parseFloat(geoRes.data[0].lat);
@@ -70,7 +71,7 @@ export default function Home() {
   const handleManualSearch = async () => {
     if (!manualCity) return;
     try {
-      const geoRes = await axios.get(`https://nominatim.openstreetmap.org/search?q=${manualCity}&format=json&limit=1`);
+      const geoRes = await publicAxios.get(`https://nominatim.openstreetmap.org/search?q=${manualCity}&format=json&limit=1`)
       if (geoRes.data.length === 0) {
         alert("Location not found.");
         setLocationError(true);
@@ -90,7 +91,7 @@ export default function Home() {
     setRoutingLoading(true);
     setRouteDest(place);
     try {
-      const res = await axios.post("http://localhost:5000/api/route", {
+      const res = await axios.post("/api/route", {
         start: currentCoords,
         end: { lat: place.lat, lon: place.lon }
       });

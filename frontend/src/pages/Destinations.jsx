@@ -3,7 +3,7 @@ import axios from "axios";
 import { useData } from "../DataContext";
 import { useAuth } from "../AuthContext";
 import { MapPin, Clock, Star, Car, Compass, MessageSquare, PlusSquare } from "lucide-react";
-const API = "http://localhost:5000"
+
 
 
 export default function Destinations() {
@@ -38,7 +38,7 @@ export default function Destinations() {
     try {
       // place.reviews is now an array of objects, map to strings for backward compatibility with summary prompt
       const reviewTexts = place.reviews ? place.reviews.map(r => typeof r === 'object' ? r.text : r) : [];
-      const res = await axios.post("http://localhost:5000/api/place-summary", {
+      const res = await axios.post("/api/place-summary", {
         name: place.name,
         reviews: reviewTexts
       });
@@ -55,7 +55,7 @@ export default function Destinations() {
     setFetchingDirectory(true);
     setDirectoryStores([]);
     try {
-      const res = await axios.post("http://localhost:5000/api/directory", {
+      const res = await axios.post("/api/directory", {
         lat: place.lat, lon: place.lon
       });
       setDirectoryStores(res.data.stores);
@@ -69,7 +69,7 @@ export default function Destinations() {
   const savePlace = async (place) => {
     setSavingPlace(true);
     try {
-      await axios.post("http://localhost:5000/api/saved-places", {
+      await axios.post("/api/saved-places", {
         name: place.name,
         address: place.address,
         lat: place.lat,

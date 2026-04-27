@@ -3,7 +3,7 @@ import axios from "axios";
 import { useAuth } from "../AuthContext";
 import { useData } from "../DataContext";
 import { Calendar, Clock, MapPin, Search, Plus, Trash2, ArrowUp, ArrowDown, Bot, CalendarCheck, Zap } from "lucide-react";
-const API = "http://localhost:5000"
+
 
 
 export default function Planner() {
@@ -24,7 +24,7 @@ export default function Planner() {
   const fetchSavedPlaces = async () => {
     setLoading(true);
     try {
-      const res = await axios.get("http://localhost:5000/api/saved-places");
+      const res = await axios.get("/api/saved-places");
       setSavedPlaces(res.data.places || res.data || []);
     } catch (err) {
       console.error(err);
@@ -39,7 +39,7 @@ export default function Planner() {
 
   const removeSavedPlace = async (id) => {
     try {
-      await axios.delete(`${API}/api/saved-places/${id}`);
+      await axios.delete(`/api/saved-places/${id}`);
       setSavedPlaces(savedPlaces.filter(p => p.id !== id));
       setSchedule(schedule.filter(p => p.id !== id));
     } catch (err) {
@@ -82,7 +82,7 @@ export default function Planner() {
 
   const saveScheduleToDB = async (finalDate, timeStr, scheduleToSave, isToday) => {
     try {
-      await axios.post("http://localhost:5000/api/itineraries", {
+      await axios.post("/api/itineraries", {
         date_str: finalDate,
         time_str: timeStr,
         places: scheduleToSave
@@ -121,7 +121,7 @@ export default function Planner() {
         rain_prob: weather.rain ? 100 : 0 
       } : { temp: 30, rain_prob: 0 };
       
-      const res = await axios.post("http://localhost:5000/api/validate-schedule", {
+      const res = await axios.post("/api/validate-schedule", {
         places: schedule,
         weather: weatherData,
         date_str: finalDate,

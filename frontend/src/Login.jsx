@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { useAuth } from "./AuthContext"
 import axios from "axios"
-const API = "http://localhost:5000"
+
 
 
 
@@ -23,7 +23,7 @@ export default function Login() {
     }
     setLoading(true)
     try {
-      const res = await axios.post(`${API}/login`, { email, password })
+      const res = await axios.post(`/login`, { email, password })
       login(res.data.token, res.data.username, res.data.role)
       navigate("/")
     } catch (err) {

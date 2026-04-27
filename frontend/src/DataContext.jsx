@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useAuth } from "./AuthContext";
-const API = "http://localhost:5000"
+import publicAxios from './publicAxios';
+
 
 
 const DataContext = createContext();
@@ -44,7 +45,7 @@ export const DataProvider = ({ children }) => {
         condition: wData.weather[0].description,
         wind_speed: wData.wind.speed * 3.6
       };
-      const res = await axios.post(`${API}/api/places`, {
+      const res = await axios.post(`/api/places`, {
         lat, lon, radius: searchRadius, category, envType: env, weather: weatherData
       });
       setPlaces(res.data.places || []);
@@ -60,11 +61,11 @@ export const DataProvider = ({ children }) => {
     setLoading(true);
     setLocationError(false);
     try {
-      const wRes = await axios.get(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`);
+      const wRes = await publicAxios.get(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`);
       setWeather(wRes.data);
       setCity(wRes.data.name);
       
-      const fRes = await axios.get(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`);
+      const fRes = await publicAxios.get(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`);
       const uniqueDays = [];
       const dailyData = [];
       const todayDate = new Date().toISOString().split("T")[0];
@@ -78,7 +79,7 @@ export const DataProvider = ({ children }) => {
       setForecast(dailyData.slice(0, 5));
       setFullForecast(fRes.data.list);
 
-      axios.get(`${API}/api/disasters`)
+      axios.get(`/api/disasters`)
         .then(res => setDisasters(res.data.disasters || []))
         .catch(err => console.error("GDACS error", err));
 
@@ -100,7 +101,7 @@ export const DataProvider = ({ children }) => {
     if (!token || role === "admin" || isInitialFetchDone.current) return;
     
     // Fetch today's plan
-    axios.get(`${API}/api/itineraries`)
+    axios.get(`/api/itineraries`)
       .then(res => {
         const todayStr = new Date().toISOString().split("T")[0];
         const todaysItin = res.data.find(it => it.date_str === todayStr);
