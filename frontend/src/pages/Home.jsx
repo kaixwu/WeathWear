@@ -9,7 +9,7 @@ import L from 'leaflet';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-const API = import.meta.env.VITE_API_URL || API
+const API = "http://localhost:5000"
 
 
 delete L.Icon.Default.prototype._getIconUrl;

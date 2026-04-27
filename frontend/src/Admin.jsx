@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { useAuth } from "./AuthContext";
 import { Link } from "react-router-dom";
-const API = import.meta.env.VITE_API_URL || API
+const API = "http://localhost:5000"
 
 
 

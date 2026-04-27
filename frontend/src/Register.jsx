@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import axios from "axios"
-const API = import.meta.env.VITE_API_URL || API
+const API = "http://localhost:5000"
 
 
 

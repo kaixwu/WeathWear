@@ -3,7 +3,7 @@ import axios from "axios";
 import { useAuth } from "../AuthContext";
 import { useData } from "../DataContext";
 import { Calendar, Clock, MapPin, Search, Plus, Trash2, ArrowUp, ArrowDown, Bot, CalendarCheck, Zap } from "lucide-react";
-const API = import.meta.env.VITE_API_URL || API
+const API = "http://localhost:5000"
 
 
 export default function Planner() {
