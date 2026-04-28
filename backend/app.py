@@ -115,6 +115,7 @@ class Itinerary(db.Model):
     date_str = db.Column(db.String(50), nullable=False)
     time_str = db.Column(db.String(50))
     places_json = db.Column(db.Text, nullable=False)
+    schedule_json = db.Column(db.Text, nullable=True)   
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
 with app.app_context():
@@ -602,19 +603,64 @@ def generate_itinerary_text():
     prompt_text = data.get("prompt", "")
     lat = data.get("lat")
     lon = data.get("lon")
+    search_location = data.get("search_location", "").strip()
     weather = data.get("weather", {})
-    if not prompt_text or not lat or not lon:
-        return jsonify({"error": "Missing prompt or location"}), 400
 
-    # 1. Fetch top nearby places (broad category)
-    top_places = fetch_google_places(lat, lon, 10000, "Any")
+    if not prompt_text:
+        return jsonify({"error": "Missing prompt"}), 400
+
+    # 1. Determine target coordinates
+    target_lat, target_lon = lat, lon
+
+    if search_location:
+        target_lat, target_lon = None, None
+
+        # ---- Try Google Geocoding ----
+        try:
+            geocode_url = "https://maps.googleapis.com/maps/api/geocode/json"
+            geocode_params = {"address": search_location, "key": google_places_key}
+            geo_resp = requests.get(geocode_url, params=geocode_params, timeout=5)
+            geo_data = geo_resp.json()
+            if geo_data.get("status") == "OK" and geo_data.get("results"):
+                location = geo_data["results"][0]["geometry"]["location"]
+                target_lat = location["lat"]
+                target_lon = location["lng"]
+                print(f"[Geocode Google] {search_location} -> ({target_lat}, {target_lon})")
+        except Exception as e:
+            print(f"[Geocode Google] Error: {e}")
+
+        # ---- Fallback to Nominatim (OpenStreetMap) ----
+        if target_lat is None or target_lon is None:
+            try:
+                nominatim_url = "https://nominatim.openstreetmap.org/search"
+                nominatim_params = {"q": search_location, "format": "json", "limit": 1}
+                headers = {"User-Agent": "SunWise/1.0"}
+                nom_resp = requests.get(nominatim_url, params=nominatim_params, headers=headers, timeout=5)
+                nom_data = nom_resp.json()
+                if nom_data:
+                    target_lat = float(nom_data[0]["lat"])
+                    target_lon = float(nom_data[0]["lon"])
+                    print(f"[Geocode Nominatim] {search_location} -> ({target_lat}, {target_lon})")
+            except Exception as e:
+                print(f"[Geocode Nominatim] Error: {e}")
+
+        # If still no coordinates, fall back to user's current location
+        if target_lat is None or target_lon is None:
+            target_lat, target_lon = lat, lon
+            print("[Geocode] All failed – using current location")
+
+    if not target_lat or not target_lon:
+        return jsonify({"error": "No location available"}), 400
+
+    # 2. Fetch top nearby places around the target coordinates
+    top_places = fetch_google_places(target_lat, target_lon, 10000, "Any")
     if not top_places:
         return jsonify({"error": "No places found nearby"}), 404
 
-    # 2. Get live travel times
-    get_tomtom_travel_times(lat, lon, top_places)
+    # 3. Get live travel times from the target location
+    get_tomtom_travel_times(target_lat, target_lon, top_places)
 
-    # 3. Build summary for Gemini
+    # 4. Build summary for Gemini
     place_summaries = []
     for p in top_places[:10]:
         place_summaries.append({
@@ -630,10 +676,10 @@ You are a travel concierge. A user described their desired outing: "{prompt_text
 
 Current weather: {weather.get('temp', 30)}°C, rain {weather.get('rain_prob', 0)}%, {weather.get('condition', 'Clear')}.
 
-Top nearby places (with live travel times from user):
+Top nearby places (with live travel times):
 {json.dumps(place_summaries, indent=2)}
 
-Choose 2-3 places that best match the user's request. Return ONLY a valid JSON object with the exact same format:
+Choose 2-3 places that best match the user's request. Return ONLY a valid JSON object with:
 {{
     "stops": ["Place Name 1", "Place Name 2", ...],
     "explanation": "A short, friendly explanation of why you chose these places.",
@@ -810,16 +856,31 @@ def handle_itineraries():
     user_id = get_jwt_identity()
     if request.method == "POST":
         data = request.get_json()
-        new_itin = Itinerary(user_id=user_id, date_str=data.get("date_str", ""), time_str=data.get("time_str", ""), places_json=json.dumps(data.get("places", [])))
+        new_itin = Itinerary(
+            user_id=user_id,
+            date_str=data.get("date_str", ""),
+            time_str=data.get("time_str", ""),
+            places_json=json.dumps(data.get("places", [])),
+            schedule_json=json.dumps(data.get("schedule", None))   # new
+        )
         db.session.add(new_itin)
         db.session.commit()
         return jsonify({"message": "Schedule confirmed!"}), 201
+
+    # GET method – also return schedule if present
     itins = Itinerary.query.filter_by(user_id=user_id).order_by(Itinerary.created_at.desc()).all()
     results = []
     for it in itins:
-        results.append({"id": it.id, "date_str": it.date_str, "time_str": it.time_str, "places": json.loads(it.places_json), "created_at": it.created_at.isoformat()})
+        results.append({
+            "id": it.id,
+            "date_str": it.date_str,
+            "time_str": it.time_str,
+            "places": json.loads(it.places_json),
+            "schedule": json.loads(it.schedule_json) if it.schedule_json else None,
+            "created_at": it.created_at.isoformat()
+        })
     return jsonify(results), 200
-
+    
 @app.route("/api/itineraries/<int:itinerary_id>", methods=["DELETE"])
 @jwt_required()
 def delete_itinerary(itinerary_id):
