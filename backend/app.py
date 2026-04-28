@@ -38,7 +38,6 @@ app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "fallback-secret")
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = 86400
 app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
 is_production = os.getenv("FLASK_ENV") == "production"
-# Secure + SameSite=None required for cross-domain cookies (Vercel frontend + Render backend)
 app.config["JWT_COOKIE_SECURE"] = is_production
 app.config["JWT_COOKIE_SAMESITE"] = "None" if is_production else "Lax"
 app.config["JWT_COOKIE_CSRF_PROTECT"] = True
@@ -71,7 +70,7 @@ gemini_client = google_genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 tomtom_key = os.getenv("TOMTOM_API_KEY")
 google_places_key = os.getenv("GOOGLE_PLACES_API_KEY")
 
-# ── MODELS ───────────────────────────────────────────────────────────────────
+# ── MODELS (unchanged) ──────────────────────────────────────────────────────
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -130,7 +129,7 @@ with app.app_context():
     except Exception as e:
         print(f"Failed to initialize database: {e}")
 
-# ── HELPERS ──────────────────────────────────────────────────────────────────
+# ── HELPERS (unchanged) ─────────────────────────────────────────────────────
 def is_valid_email(email): return bool(re.match(r"^[\w\.-]+@[\w\.-]+\.\w{2,}$", email))
 def is_strong_password(password):
     if len(password) < 8 or len(password) > 32: return False
@@ -242,7 +241,7 @@ def get_logs():
     logs = SecurityLog.query.order_by(SecurityLog.timestamp.desc()).limit(100).all()
     return jsonify([{"id": l.id, "ip": l.ip_address, "email": l.email_attempted, "status": l.status, "time": str(l.timestamp)} for l in logs]), 200
 
-# ── CORE FEATURES ────────────────────────────────────────────────────────────
+# ── CORE FEATURES (unchanged) ───────────────────────────────────────────────
 import xml.etree.ElementTree as ET
 
 @app.route("/api/disasters", methods=["GET"])
@@ -293,7 +292,7 @@ def autocomplete():
         print(f"[Autocomplete] Error: {e}")
         return jsonify({"suggestions": []}), 200
 
-# ── GOOGLE PLACES FETCH (with ratings, popularity, and editorial summary) ───
+# ── GOOGLE PLACES FETCH (unchanged) ─────────────────────────────────────────
 def fetch_google_places(lat, lon, radius, category="Any"):
     if not google_places_key:
         return []
@@ -397,7 +396,7 @@ def fetch_google_places(lat, lon, radius, category="Any"):
         unique.append(p)
     return unique
 
-# ── TOMTOM MATRIX ───────────────────────────────────────────────────────────
+# ── TOMTOM MATRIX (unchanged) ───────────────────────────────────────────────
 def get_tomtom_travel_times(origin_lat, origin_lon, destinations):
     if not tomtom_key or not destinations:
         return
@@ -424,7 +423,7 @@ def get_tomtom_travel_times(origin_lat, origin_lon, destinations):
         for d in destinations:
             d["travelMins"] = round(d["distance"] * 4)
 
-# ── LOCAL SCORING ALGORITHM ─────────────────────────────────────────────────
+# ── LOCAL SCORING (unchanged) ───────────────────────────────────────────────
 def calculate_local_scores(places, weather, preferred_category, env_type):
     if not places:
         return []
@@ -485,7 +484,7 @@ def calculate_local_scores(places, weather, preferred_category, env_type):
         p["matchReasons"] = reasons
     return places
 
-# ── PLACES ENDPOINT ─────────────────────────────────────────────────────────
+# ── PLACES ENDPOINT (unchanged) ─────────────────────────────────────────────
 @app.route("/api/places", methods=["POST"])
 @jwt_required()
 def get_places():
@@ -507,23 +506,66 @@ def get_places():
     scored.sort(key=lambda x: x["score"], reverse=True)
     return jsonify({"places": scored[:20]}), 200
 
-# ── GEMINI ITINERARY GENERATOR (for future use) ─────────────────────────────
+# ── NEW: GENERATE SMART ITINERARY FROM TODAY’S PLAN ─────────────────────────
 @app.route("/api/generate-itinerary", methods=["POST"])
 @jwt_required()
 def generate_itinerary():
     data = request.get_json()
     places = data.get("places", [])
     weather = data.get("weather", {})
-    preferences = data.get("preferences", {})
+    start_time = data.get("start_time", datetime.now().strftime("%I:%M %p"))
+
     if not places:
         return jsonify({"error": "No places provided"}), 400
-    try:
-        place_names = [p["name"] for p in places[:10]]
-        prompt = f"""
-Create a short 2-3 stop itinerary from these places: {', '.join(place_names)}.
-Weather: {weather.get('temp')}°C, rain {weather.get('rain_prob')}%.
-Return JSON: {{"stops": ["Place A", "Place B"], "explanation": "..."}}
+
+    # Build rich summaries with opening hours
+    place_summaries = []
+    for p in places:
+        place_summaries.append({
+            "name": p["name"],
+            "category": p.get("category", "Attraction"),
+            "distance_km": round(p.get("distance", 0), 1),
+            "travel_mins": p.get("travelMins", 0),
+            "is_open": p.get("isOpen"),
+            "hours": p.get("hoursDisplay", "")
+        })
+
+    prompt = f"""
+You are a smart travel planner. Given the user's saved destinations for today, create an optimal itinerary starting at {start_time} (current local time).
+
+Weather: {weather.get('temp', 30)}°C, rain {weather.get('rain_prob', 0)}%, {weather.get('condition', 'Clear')}.
+
+Available places with opening hours and travel times:
+{json.dumps(place_summaries, indent=2)}
+
+Consider:
+- Weather (indoor vs outdoor)
+- Current time and closing times (if no hours listed, assume closes at 9:00 PM)
+- Logical sequence that minimises travel
+- What activities to do at each place (briefly)
+- Realistic durations (e.g., 1-2 hours for a restaurant, 1-3 hours for a museum)
+- The user must be able to visit all stops before they close
+
+Return ONLY a valid JSON object with the following structure:
+{{
+  "stops": ["Place A", "Place B", ...],
+  "explanation": "A detailed, friendly paragraph that explains why this order is best. Mention specific times when the user should be at each place, how long to stay, and why the first stop makes sense (e.g., because it's the closest, or because it closes earlier). Reference weather if it influenced the decision.",
+  "total_travel_mins": total estimated drive time in minutes,
+  "best_start_time": "HH:MM AM/PM",
+  "schedule": [
+    {{
+      "place": "Place A",
+      "arrival_time": "11:00 AM",
+      "departure_time": "12:30 PM",
+      "activity_suggestion": "Enjoy a hearty breakfast and coffee"
+    }},
+    ...
+  ]
+}}
+
+Only use the exact place names from the list above. For the schedule, use the place name exactly as given.
 """
+    try:
         resp = gemini_client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
         text = resp.text.strip()
         if "```json" in text:
@@ -531,33 +573,113 @@ Return JSON: {{"stops": ["Place A", "Place B"], "explanation": "..."}}
         elif "```" in text:
             text = text.split("```")[1].split("```")[0]
         result = json.loads(text)
+
+        # Attach full place info to each stop name
+        full_stops = []
+        for stop_name in result.get("stops", []):
+            match = next((p for p in places if p["name"] == stop_name), None)
+            full_stops.append(match if match else {"name": stop_name})
+
+        result["stops"] = full_stops
+        # Keep schedule as list of objects
         return jsonify(result), 200
+
     except Exception as e:
-        return jsonify({"stops": place_names[:2], "explanation": "Top two picks based on your preferences."}), 200
+        print(f"Gemini itinerary error: {e}")
+        return jsonify({
+            "stops": places[:2],
+            "explanation": "Top two picks based on your preferences.",
+            "total_travel_mins": 0,
+            "best_start_time": start_time,
+            "schedule": []
+        }), 200
 
-# ── SAVED PLACES & AI SUMMARY ───────────────────────────────────────────────
+# ── NEW: TEXT‑PROMPT ITINERARY GENERATION ───────────────────────────────────
+@app.route("/api/generate-itinerary-text", methods=["POST"])
+@jwt_required()
+def generate_itinerary_text():
+    data = request.get_json()
+    prompt_text = data.get("prompt", "")
+    lat = data.get("lat")
+    lon = data.get("lon")
+    weather = data.get("weather", {})
+    if not prompt_text or not lat or not lon:
+        return jsonify({"error": "Missing prompt or location"}), 400
 
+    # 1. Fetch top nearby places (broad category)
+    top_places = fetch_google_places(lat, lon, 10000, "Any")
+    if not top_places:
+        return jsonify({"error": "No places found nearby"}), 404
+
+    # 2. Get live travel times
+    get_tomtom_travel_times(lat, lon, top_places)
+
+    # 3. Build summary for Gemini
+    place_summaries = []
+    for p in top_places[:10]:
+        place_summaries.append({
+            "name": p["name"],
+            "category": p.get("category", "Attraction"),
+            "distance_km": p.get("distance", 0),
+            "travel_mins": p.get("travelMins", 0),
+            "is_open": p.get("isOpen")
+        })
+
+    final_prompt = f"""
+You are a travel concierge. A user described their desired outing: "{prompt_text}".
+
+Current weather: {weather.get('temp', 30)}°C, rain {weather.get('rain_prob', 0)}%, {weather.get('condition', 'Clear')}.
+
+Top nearby places (with live travel times from user):
+{json.dumps(place_summaries, indent=2)}
+
+Choose 2-3 places that best match the user's request. Return ONLY a valid JSON object with the exact same format:
+{{
+    "stops": ["Place Name 1", "Place Name 2", ...],
+    "explanation": "A short, friendly explanation of why you chose these places.",
+    "total_travel_mins": estimated total drive time
+}}
+
+Only use exact place names from the list above.
+"""
+    try:
+        resp = gemini_client.models.generate_content(model="gemini-2.5-flash-lite", contents=final_prompt)
+        text = resp.text.strip()
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0]
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0]
+        result = json.loads(text)
+
+        # Attach full place details to each stop name
+        full_stops = []
+        for stop_name in result.get("stops", []):
+            match = next((p for p in top_places if p["name"] == stop_name), None)
+            if match:
+                full_stops.append(match)
+            else:
+                full_stops.append({"name": stop_name})
+        result["stops"] = full_stops
+        return jsonify(result), 200
+
+    except Exception as e:
+        print(f"Gemini text itinerary error: {e}")
+        return jsonify({"stops": top_places[:2], "explanation": "Here are two top picks nearby.", "total_travel_mins": 0}), 200
+
+# ── REMAINING ENDPOINTS (unchanged) ─────────────────────────────────────────
 @app.route("/api/saved-places", methods=["GET", "POST"])
 @jwt_required()
 def handle_saved_places():
     user_id = get_jwt_identity()
     if request.method == "POST":
         data = request.get_json()
-        
-        # Prevent duplicates
         existing = SavedPlace.query.filter_by(user_id=user_id, name=data.get("name")).first()
         if existing:
             return jsonify({"message": "Already saved", "id": existing.id}), 200
-            
         new_place = SavedPlace(
-            user_id=user_id,
-            name=data.get("name"),
-            address=data.get("address"),
-            lat=data.get("lat"),
-            lon=data.get("lon"),
-            category=data.get("category"),
-            image_url=data.get("photoUrl"),
-            rating=data.get("rating")
+            user_id=user_id, name=data.get("name"), address=data.get("address"),
+            lat=data.get("lat"), lon=data.get("lon"), category=data.get("category"),
+            image_url=data.get("photoUrl"), rating=data.get("rating")
         )
         db.session.add(new_place)
         db.session.commit()
@@ -587,14 +709,11 @@ def place_summary():
     data = request.get_json()
     place_name = data.get("name", "this place")
     reviews = data.get("reviews", [])
-    
     if not reviews:
         return jsonify({"summary": "Not enough reviews available to generate a summary."}), 200
-        
     prompt = f"Summarize the following user reviews for {place_name} into 2 to 3 short sentences. Highlight the best things people love and one thing to watch out for if mentioned. Make it sound helpful and friendly.\n\nReviews:\n"
     for idx, r in enumerate(reviews):
         prompt += f"- {r}\n"
-        
     try:
         resp = gemini_client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
         text = resp.text.strip()
@@ -612,10 +731,8 @@ def validate_schedule():
     date_str = data.get("date_str", "unknown date")
     time_str = data.get("time_str", "unknown time")
     now_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
-    
     if not places:
         return jsonify({"validation": "No places selected."}), 400
-        
     place_details = []
     for p in places:
         hours_info = p.get('hoursDisplay', '')
@@ -625,7 +742,6 @@ def validate_schedule():
         if hours_info:
             detail += f" - Hours: {hours_info}"
         place_details.append(detail)
-    
     prompt = f"""
 Current date and time is: {now_str}.
 The user wants to schedule an itinerary on {date_str} at {time_str}.
@@ -651,20 +767,9 @@ def get_directory():
     lon = data.get("lon")
     if not lat or not lon or not google_places_key:
         return jsonify({"stores": []}), 200
-    
     url = "https://places.googleapis.com/v1/places:searchNearby"
-    headers = {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": google_places_key,
-        "X-Goog-FieldMask": "places.displayName,places.primaryType"
-    }
-    body = {
-        "includedTypes": ["store", "restaurant", "cafe", "clothing_store", "shoe_store", "electronics_store"],
-        "maxResultCount": 20,
-        "locationRestriction": {
-            "circle": {"center": {"latitude": lat, "longitude": lon}, "radius": 200.0}
-        }
-    }
+    headers = {"Content-Type": "application/json", "X-Goog-Api-Key": google_places_key, "X-Goog-FieldMask": "places.displayName,places.primaryType"}
+    body = {"includedTypes": ["store", "restaurant", "cafe", "clothing_store", "shoe_store", "electronics_store"], "maxResultCount": 20, "locationRestriction": {"circle": {"center": {"latitude": lat, "longitude": lon}, "radius": 200.0}}}
     try:
         resp = requests.post(url, headers=headers, json=body, timeout=10)
         if resp.status_code == 200:
@@ -686,7 +791,6 @@ def get_route():
     end = data.get("end")
     if not tomtom_key or not start or not end:
         return jsonify({"error": "Missing parameters"}), 400
-    
     url = f"https://api.tomtom.com/routing/1/calculateRoute/{start['lat']},{start['lon']}:{end['lat']},{end['lon']}/json"
     params = {"key": tomtom_key, "routeType": "fastest", "traffic": "true", "travelMode": "car"}
     try:
@@ -706,27 +810,14 @@ def handle_itineraries():
     user_id = get_jwt_identity()
     if request.method == "POST":
         data = request.get_json()
-        new_itin = Itinerary(
-            user_id=user_id,
-            date_str=data.get("date_str", ""),
-            time_str=data.get("time_str", ""),
-            places_json=json.dumps(data.get("places", []))
-        )
+        new_itin = Itinerary(user_id=user_id, date_str=data.get("date_str", ""), time_str=data.get("time_str", ""), places_json=json.dumps(data.get("places", [])))
         db.session.add(new_itin)
         db.session.commit()
         return jsonify({"message": "Schedule confirmed!"}), 201
-    
-    # GET method
     itins = Itinerary.query.filter_by(user_id=user_id).order_by(Itinerary.created_at.desc()).all()
     results = []
     for it in itins:
-        results.append({
-            "id": it.id,
-            "date_str": it.date_str,
-            "time_str": it.time_str,
-            "places": json.loads(it.places_json),
-            "created_at": it.created_at.isoformat()
-        })
+        results.append({"id": it.id, "date_str": it.date_str, "time_str": it.time_str, "places": json.loads(it.places_json), "created_at": it.created_at.isoformat()})
     return jsonify(results), 200
 
 @app.route("/api/itineraries/<int:itinerary_id>", methods=["DELETE"])
