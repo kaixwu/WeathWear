@@ -293,6 +293,28 @@ def autocomplete():
         print(f"[Autocomplete] Error: {e}")
         return jsonify({"suggestions": []}), 200
 
+@app.route("/api/place-details", methods=["POST"])
+def place_details():
+    data = request.get_json()
+    place_id = data.get("place_id")
+    if not place_id or not google_places_key:
+        return jsonify({"error": "Missing place_id"}), 400
+
+    url = f"https://places.googleapis.com/v1/places/{place_id}"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": google_places_key,
+        "X-Goog-FieldMask": "location"
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            loc = resp.json().get("location", {})
+            return jsonify({"lat": loc["latitude"], "lon": loc["longitude"]}), 200
+        return jsonify({"error": "Place not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # ── GOOGLE PLACES FETCH (unchanged) ─────────────────────────────────────────
 def fetch_google_places(lat, lon, radius, category="Any"):
     if not google_places_key:
@@ -357,7 +379,13 @@ def fetch_google_places(lat, lon, radius, category="Any"):
                 user_rating_count = place.get("userRatingCount", 0)
                 
                 photos = place.get("photos", [])
-                photo_url = f"https://places.googleapis.com/v1/{photos[0]['name']}/media?maxHeightPx=400&maxWidthPx=400&key={google_places_key}" if photos else None
+                photo_url = None
+                if photos:
+                    # Choose the photo with the largest area among the first 5 (lazy loading only one field, but width/height are available)
+                    best_photo = max(photos[:5], key=lambda p: (p.get("widthPx", 0) or 0) * (p.get("heightPx", 0) or 0), default=photos[0])
+                    photo_name = best_photo["name"]
+                    # Use a higher resolution (800x800) – you can go up to 1600 if needed
+                    photo_url = f"https://places.googleapis.com/v1/{photo_name}/media?maxHeightPx=800&maxWidthPx=800&key={google_places_key}"
                 
                 reviews = []
                 for r in place.get("reviews", [])[:5]:

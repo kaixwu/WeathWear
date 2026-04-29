@@ -28,8 +28,8 @@ function MapFlyTo({ center }) {
 
 export default function Home() {
   const { token } = useAuth();
-  const { 
-    city, weather, currentCoords, loading, locationError, setLocationError, fetcheverything, places, todayPlan
+  const {
+    city, weather, currentCoords, loading, locationError, setLocationError, fetcheverything, places, todayPlan, radius
   } = useData();
 
   const [manualCity, setManualCity] = useState("");
@@ -55,35 +55,47 @@ export default function Home() {
     }
   };
 
-  const selectSuggestion = (sug) => {
+  const selectSuggestion = async (sug) => {
     setManualCity(sug.formatted);
     setShowSuggestions(false);
-    publicAxios.get(`https://nominatim.openstreetmap.org/search?q=${sug.formatted}&format=json&limit=1`)
+
+    // If the suggestion includes a place_id, use Google Place Details
+    if (sug.place_id) {
+      try {
+        const res = await axios.post("/api/place-details", { place_id: sug.place_id });
+        const { lat, lon } = res.data;
+        fetcheverything(lat, lon, radius);
+      } catch (err) {
+        console.error("Place details failed, falling back to Nominatim:", err);
+        // Fallback to Nominatim if the Google endpoint fails
+        geocodeWithNominatim(sug.formatted);
+      }
+    } else {
+      // No place_id – use Nominatim as before
+      geocodeWithNominatim(sug.formatted);
+    }
+  };
+
+  // Helper for Nominatim fallback
+  const geocodeWithNominatim = (address) => {
+    publicAxios.get(`https://nominatim.openstreetmap.org/search?q=${address}&format=json&limit=1`)
       .then(geoRes => {
         if (geoRes.data.length > 0) {
           const lat = parseFloat(geoRes.data[0].lat);
           const lon = parseFloat(geoRes.data[0].lon);
-          fetcheverything(lat, lon);
+          fetcheverything(lat, lon, radius);
+        } else {
+          alert("Location not found.");
         }
-      });
+      })
+      .catch(() => alert("Failed to search location."));
   };
 
   const handleManualSearch = async () => {
     if (!manualCity) return;
-    try {
-      const geoRes = await publicAxios.get(`https://nominatim.openstreetmap.org/search?q=${manualCity}&format=json&limit=1`)
-      if (geoRes.data.length === 0) {
-        alert("Location not found.");
-        setLocationError(true);
-        return;
-      }
-      const lat = parseFloat(geoRes.data[0].lat);
-      const lon = parseFloat(geoRes.data[0].lon);
-      fetcheverything(lat, lon);
-    } catch (err) {
-      alert("Failed to search location.");
-      setLocationError(true);
-    }
+    setLoading(true);
+    setLocationError(false);
+    geocodeWithNominatim(manualCity);
   };
 
   const drawRoute = async (place) => {
@@ -112,7 +124,7 @@ export default function Home() {
         <MapIcon size={32} color="var(--accent-blue)" />
         <h2 className="font-heading" style={{ margin: 0 }}>Overview</h2>
       </div>
-      
+
       {locationError ? (
         <div className="glass-card" style={{ textAlign: "center", padding: "40px" }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px" }}><AlertCircle size={48} color="var(--accent-blue)" /></div>
@@ -138,7 +150,7 @@ export default function Home() {
         <div className="skeleton" style={{ height: "300px", marginBottom: "32px" }}></div>
       ) : weather && currentCoords ? (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "24px", alignItems: "flex-start" }}>
-          
+
           <div style={{ flex: "1 1 300px", display: "flex", flexDirection: "column", gap: "24px" }}>
             <div className="glass-card" style={{ display: "flex", flexDirection: "column", padding: "32px", borderTop: "4px solid var(--accent-blue)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
@@ -156,7 +168,7 @@ export default function Home() {
                 <Navigation size={20} color="var(--accent-blue)" />
                 <h3 className="font-heading" style={{ margin: 0, fontSize: "1.2rem" }}>Today's Plan</h3>
               </div>
-              
+
               {!todayPlan ? (
                 <div style={{ color: "var(--text-muted)", fontSize: "0.9rem", textAlign: "center", padding: "20px 0" }}>
                   No plan scheduled for today. Go to the Planner to build one!
@@ -177,13 +189,13 @@ export default function Home() {
             </div>
 
           </div>
-          
+
           <div style={{ flex: "1 1 600px", borderRadius: "16px", overflow: "hidden", border: "1px solid var(--glass-border)", height: "600px", position: "relative" }}>
             <MapContainer center={[currentCoords.lat, currentCoords.lon]} zoom={13} style={{ height: "100%", width: "100%" }}>
               <MapFlyTo center={[currentCoords.lat, currentCoords.lon]} />
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>' />
               <TileLayer url="https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=hLvRIfmyuzqpTNvtrZ3Y0gV1HAA3eLFj" attribution='&copy; <a href="https://www.tomtom.com/">TomTom Live Traffic</a>' opacity={0.7} />
-              
+
               {/* User Location Marker */}
               <Marker position={[currentCoords.lat, currentCoords.lon]}>
                 <Popup><strong>You are here</strong></Popup>
@@ -192,7 +204,7 @@ export default function Home() {
               {(routePolyline.length > 0 ? [routeDest] : places.slice(0, 10)).map((p, i) => p && (
                 <Marker key={i} position={[p.lat, p.lon]}>
                   <Popup>
-                    <strong>{p.name}</strong><br/>{p.category}<br/>
+                    <strong>{p.name}</strong><br />{p.category}<br />
                     {routePolyline.length === 0 && (
                       <button onClick={() => drawRoute(p)} style={{ marginTop: "8px", padding: "4px 8px", background: "var(--accent-blue)", border: "none", borderRadius: "4px", color: "#fff", cursor: "pointer", fontSize: "0.8rem" }}>Show Route</button>
                     )}
@@ -204,7 +216,7 @@ export default function Home() {
                 <Polyline positions={routePolyline} color="var(--accent-blue)" weight={6} opacity={0.8} />
               )}
             </MapContainer>
-            
+
             {routeInfo && !routingLoading && (
               <div className="glass-card" style={{ position: "absolute", bottom: "24px", left: "24px", right: "24px", zIndex: 1000, padding: "16px", background: "rgba(15, 23, 42, 0.85)", border: "1px solid var(--accent-blue)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
