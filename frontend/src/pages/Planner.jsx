@@ -173,40 +173,32 @@ export default function Planner() {
         </h1>
       </div>
 
-      {/* ------ Toggle Tabs ------ */}
-      <div style={{ display: "flex", borderBottom: "2px solid var(--glass-border)", marginBottom: "24px" }}>
-        <button
-          onClick={() => setActiveTab("today")}
-          style={{
-            flex: 1, padding: "12px 0", background: "transparent", border: "none",
-            borderBottom: activeTab === "today" ? "3px solid var(--accent-blue)" : "3px solid transparent",
-            color: activeTab === "today" ? "var(--accent-blue)" : "var(--text-muted)",
-            fontWeight: "700", fontSize: "1.1rem", cursor: "pointer", transition: "0.2s",
-          }}
-        >
-          Today’s Plan
-          {todayItins.length > 0 && (
-            <span style={{ marginLeft: "8px", background: "var(--accent-blue)", color: "#fff", padding: "2px 8px", borderRadius: "20px", fontSize: "0.75rem" }}>
-              {todayItins.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("upcoming")}
-          style={{
-            flex: 1, padding: "12px 0", background: "transparent", border: "none",
-            borderBottom: activeTab === "upcoming" ? "3px solid var(--accent-teal)" : "3px solid transparent",
-            color: activeTab === "upcoming" ? "var(--accent-teal)" : "var(--text-muted)",
-            fontWeight: "700", fontSize: "1.1rem", cursor: "pointer", transition: "0.2s",
-          }}
-        >
-          Upcoming
-          {upcomingItins.length > 0 && (
-            <span style={{ marginLeft: "8px", background: "var(--accent-teal)", color: "#000", padding: "2px 8px", borderRadius: "20px", fontSize: "0.75rem" }}>
-              {upcomingItins.length}
-            </span>
-          )}
-        </button>
+      {/* ------ Segmented Tabs ------ */}
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: "30px" }}>
+        <div className="segmented-control" style={{ width: "100%", maxWidth: "400px" }}>
+          <button
+            onClick={() => setActiveTab("today")}
+            className={`segmented-btn ${activeTab === "today" ? "active" : ""}`}
+          >
+            Today
+            {todayItins.length > 0 && (
+              <span style={{ background: activeTab === "today" ? "var(--accent-teal)" : "rgba(255,255,255,0.1)", color: activeTab === "today" ? "#000" : "#fff", padding: "2px 8px", borderRadius: "20px", fontSize: "0.75rem", marginLeft: "6px" }}>
+                {todayItins.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("upcoming")}
+            className={`segmented-btn ${activeTab === "upcoming" ? "active" : ""}`}
+          >
+            Upcoming
+            {upcomingItins.length > 0 && (
+              <span style={{ background: activeTab === "upcoming" ? "var(--accent-teal)" : "rgba(255,255,255,0.1)", color: activeTab === "upcoming" ? "#000" : "#fff", padding: "2px 8px", borderRadius: "20px", fontSize: "0.75rem", marginLeft: "6px" }}>
+                {upcomingItins.length}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* ------ Today’s Plan Section ------ */}
@@ -252,28 +244,30 @@ export default function Planner() {
 
                   {/* Schedule display */}
                   {generatedPlan.schedule && generatedPlan.schedule.length > 0 ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "12px" }}>
+                    <div className="timeline-container" style={{ marginBottom: "16px" }}>
                       {generatedPlan.schedule.map((item, idx) => (
-                        <div key={idx} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px", background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
-                          <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "var(--accent-blue)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700" }}>{idx + 1}</div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: "700" }}>{item.place}</div>
-                            <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                              {item.arrival_time} → {item.departure_time}
-                              {item.activity_suggestion && <div style={{ fontStyle: "italic", marginTop: "2px" }}>{item.activity_suggestion}</div>}
+                        <div key={idx} className="timeline-item">
+                          <div className="timeline-dot" />
+                          <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+                            <div style={{ fontWeight: "700", width: "100px", flexShrink: 0, color: "var(--accent-teal)" }}>
+                              {item.arrival_time}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: "700", fontSize: "1.05rem" }}>{item.place}</div>
+                              {item.activity_suggestion && <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>{item.activity_suggestion}</div>}
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div className="timeline-container" style={{ marginBottom: "16px" }}>
                       {generatedPlan.stops?.map((stop, idx) => (
-                        <div key={idx} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px", background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
-                          <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "var(--accent-blue)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700" }}>{idx + 1}</div>
+                        <div key={idx} className="timeline-item">
+                          <div className="timeline-dot" />
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: "700" }}>{stop.name}</div>
-                            <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{stop.category} · {stop.distance} km · {stop.travelMins} min</div>
+                            <div style={{ fontWeight: "700", fontSize: "1.05rem" }}>{stop.name}</div>
+                            <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>{stop.category} · {stop.distance} km · {stop.travelMins} min</div>
                           </div>
                         </div>
                       ))}
@@ -348,34 +342,38 @@ export default function Planner() {
           )}
 
           {/* Text Prompt Section */}
-          <div style={{ marginTop: "40px" }}>
-            <h3 className="font-heading" style={{ marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
-              <Sparkles size={20} color="var(--accent-teal)" /> Ask AI to Plan
+          <div style={{ marginTop: "50px" }}>
+            <h3 className="font-heading" style={{ marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", fontSize: "1.4rem", letterSpacing: "0.05em" }}>
+              <Sparkles size={24} color="var(--accent-teal)" /> AI Travel Assistant
             </h3>
-            <div style={{ display: "flex", gap: "12px", marginBottom: "12px" }}>
+            
+            <div className="ai-prompt-box">
               <input
+                className="ai-input"
                 type="text"
-                placeholder="e.g., Rainy afternoon with kids, or Romantic evening"
+                placeholder="e.g. A relaxing 3-stop nature trip near Tagaytay..."
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                className="input-field"
-                style={{ flex: 1, marginBottom: 0 }}
                 onKeyDown={(e) => e.key === "Enter" && handleTextPrompt()}
+                style={{ minWidth: "150px" }}
               />
+              <div style={{ width: "1px", height: "24px", background: "rgba(255,255,255,0.2)", margin: "0 12px" }} />
               <input
+                className="ai-input"
                 type="text"
-                placeholder="Area (e.g., Intramuros, BGC, Tagaytay)"
+                placeholder="Area (e.g., Intramuros)"
                 value={searchLocation}
                 onChange={(e) => setSearchLocation(e.target.value)}
-                className="input-field"
-                style={{ flex: 1, marginBottom: 0 }}
+                onKeyDown={(e) => e.key === "Enter" && handleTextPrompt()}
+                style={{ flex: 0.5, minWidth: "100px" }}
               />
-              <button
-                onClick={handleTextPrompt}
+              <button 
+                className="ai-submit-btn"
+                onClick={handleTextPrompt} 
                 disabled={aiSuggestionLoading || !aiPrompt.trim()}
-                style={{ padding: "0 24px", background: "var(--accent-teal)", border: "none", borderRadius: "8px", color: "#000", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
+                style={{ marginLeft: "12px" }}
               >
-                <Send size={18} /> {aiSuggestionLoading ? "..." : "Send"}
+                {aiSuggestionLoading ? <div className="spinner" style={{ width: "18px", height: "18px", borderColor: "rgba(0,0,0,0.2)", borderTopColor: "#000" }} /> : <Send size={18} />}
               </button>
             </div>
 
@@ -423,22 +421,36 @@ export default function Planner() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
               {upcomingItins.map((it) => (
                 <div key={it.id} className="glass-card" style={{ flex: "1 1 300px", padding: "16px", minWidth: "280px" }}>
-                  <div style={{ fontWeight: "700", fontSize: "1.1rem", marginBottom: "8px" }}>
-                    {it.date_str} {it.time_str && `at ${it.time_str}`}
+                  <div style={{ fontWeight: "700", fontSize: "1.2rem", marginBottom: "16px", color: "var(--accent-blue)" }}>
+                    {it.date_str} {it.time_str && `| ${it.time_str}`}
                   </div>
                   {it.schedule ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div className="timeline-container">
                       {it.schedule.map((item, idx) => (
-                        <div key={idx} style={{ fontSize: "0.9rem", color: "#e2e8f0" }}>
-                          <strong>{item.arrival_time}–{item.departure_time}:</strong> {item.place}
-                          {item.activity_suggestion && <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontStyle: "italic" }}>{item.activity_suggestion}</div>}
+                        <div key={idx} className="timeline-item">
+                          <div className="timeline-dot" />
+                          <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+                            <div style={{ fontWeight: "700", width: "80px", flexShrink: 0, color: "var(--accent-teal)", fontSize: "0.9rem" }}>
+                              {item.arrival_time}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: "700", fontSize: "1rem" }}>{item.place}</div>
+                              {item.activity_suggestion && <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "4px" }}>{item.activity_suggestion}</div>}
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <ul style={{ margin: 0, paddingLeft: "20px", color: "#e2e8f0" }}>
-                      {it.places.map((p, idx) => <li key={idx}>{p.name} ({p.category})</li>)}
-                    </ul>
+                    <div className="timeline-container">
+                      {it.places.map((p, idx) => (
+                        <div key={idx} className="timeline-item">
+                          <div className="timeline-dot" />
+                          <div style={{ fontWeight: "700", fontSize: "1rem" }}>{p.name}</div>
+                          <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{p.category}</div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                   <button onClick={() => deleteItinerary(it.id)} style={{ marginTop: "12px", padding: "4px 8px", background: "transparent", border: "1px solid var(--danger)", color: "var(--danger)", borderRadius: "4px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
                     <Trash2 size={14} /> Remove

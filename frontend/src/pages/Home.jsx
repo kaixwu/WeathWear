@@ -47,28 +47,56 @@ export default function Home() {
   const [heroImgUrls, setHeroImgUrls] = useState([]);
   const [currentImgIndex, setCurrentImgIndex] = useState(0);
 
-  const displayCity = (userCity || city || '').toUpperCase();
+  // Show real name only if user manually searched, else "Current Location"
+  const displayCity = userCity ? userCity.toUpperCase() : (city ? "CURRENT LOCATION" : '');
 
   // ── Hero image effect (uses Unsplash via backend proxy) ─────────────────
   useEffect(() => {
-    const name = userCity || city;
-    const cleanName = name.split(',')[0].trim();
-    const query = `${cleanName} Philippines landscape`;
+    const fetchHeroImages = async () => {
+      let query;
 
-    axios.post('/api/hero-image', { query })
-      .then(res => {
-        if (res.data.urls && res.data.urls.length > 0) {
-          setHeroImgUrls(res.data.urls);
-          setCurrentImgIndex(0);
-        } else if (res.data.url) {
-          setHeroImgUrls([res.data.url]);
-          setCurrentImgIndex(0);
-        } else {
-          setHeroImgUrls([]);
+      if (userCity) {
+        // User manually searched — extract city/province level from the address string
+        const parts = userCity.split(',').map(p => p.trim());
+        let cleanName = parts[0];
+        if (parts.length >= 3) {
+          cleanName = parts[parts.length - 2].toLowerCase().includes('philippines')
+            ? parts[parts.length - 3]
+            : parts[parts.length - 2];
+        } else if (parts.length === 2) {
+          cleanName = parts[1].toLowerCase().includes('philippines') ? parts[0] : parts[1];
         }
-      })
-      .catch(() => setHeroImgUrls([]));
-  }, [city, userCity]);
+        query = `${cleanName} Philippines`;
+      } else if (city && currentCoords) {
+        // Auto-detected GPS — reverse geocode to get province, not exact city
+        try {
+          const geoRes = await axios.get(`/api/reverse-geocode?lat=${currentCoords.lat}&lon=${currentCoords.lon}`);
+          const province = geoRes.data.province || "Philippines";
+          query = `${province} Philippines`;
+        } catch {
+          query = "Philippines beautiful travel";
+        }
+      } else {
+        return;
+      }
+
+      axios.post('/api/hero-image', { query })
+        .then(res => {
+          if (res.data.urls && res.data.urls.length > 0) {
+            setHeroImgUrls(res.data.urls);
+            setCurrentImgIndex(0);
+          } else if (res.data.url) {
+            setHeroImgUrls([res.data.url]);
+            setCurrentImgIndex(0);
+          } else {
+            setHeroImgUrls([]);
+          }
+        })
+        .catch(() => setHeroImgUrls([]));
+    };
+
+    fetchHeroImages();
+  }, [city, userCity, currentCoords]);
 
   // Auto slide effect
   useEffect(() => {

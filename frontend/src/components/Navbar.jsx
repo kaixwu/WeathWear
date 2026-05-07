@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../AuthContext";
-import { Home, CloudRain, Map, Calendar, ShieldCheck, LogOut, User } from "lucide-react";
+import { Home, CloudRain, Map, Calendar, ShieldCheck, LogOut, User, Compass } from "lucide-react";
 const API = "http://localhost:5000"
 
 export default function Navbar() {
@@ -23,7 +23,7 @@ export default function Navbar() {
       display: "flex", justifyContent: "space-between", alignItems: "center",
       padding: "16px 32px", background: "var(--glass-bg)",
       backdropFilter: "blur(12px)", borderBottom: "1px solid var(--glass-border)",
-      marginBottom: "24px", position: "sticky", top: 0, zIndex: 1000
+      marginBottom: location.pathname === "/home" ? "0" : "24px", position: "sticky", top: 0, zIndex: 1000
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
         <Link to="/home" style={{ textDecoration: "none" }}>

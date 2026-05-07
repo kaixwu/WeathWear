@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import Weather from "./pages/Weather";
 import Destinations from "./pages/Destinations";
 import Planner from "./pages/Planner";
+import Discover from "./pages/Discover";
 import Navbar from "./components/Navbar";
 
 

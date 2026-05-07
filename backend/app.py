@@ -302,17 +302,27 @@ def hero_image():
 
     def fetch_image_unsplash(search_query):
         if not unsplash_key: return []
-        url = "https://api.unsplash.com/photos/random"
+        url = "https://api.unsplash.com/search/photos"
         headers = {"Authorization": f"Client-ID {unsplash_key}"}
-        params = {"query": search_query, "orientation": "landscape", "count": 5, "w": 1920, "q": 80}
+        params = {
+            "query": search_query,
+            "orientation": "landscape",
+            "per_page": 10,
+            "order_by": "relevant"
+        }
         try:
-            resp = requests.get(url, headers=headers, params=params, timeout=5)
+            resp = requests.get(url, headers=headers, params=params, timeout=8)
+            print(f"[Unsplash] Status: {resp.status_code} for query: '{search_query}'")
             if resp.status_code == 200:
-                resp_data = resp.json()
-                if isinstance(resp_data, list) and len(resp_data) > 0:
-                    return [p["urls"]["raw"] + "&w=1920&q=80" for p in resp_data]
+                data = resp.json()
+                results = data.get("results", [])
+                if len(results) > 0:
+                    good = [p for p in results if p.get("width", 0) >= 1280]
+                    photos = good if good else results
+                    return [p["urls"]["raw"] + "&w=1920&q=85&fit=crop" for p in photos[:5]]
+            return []
         except Exception as e:
-            print(f"Unsplash error: {e}")
+            print(f"[Unsplash] Exception: {e}")
         return []
 
     def fetch_google_place_photo(search_query):
@@ -323,38 +333,132 @@ def hero_image():
             "X-Goog-Api-Key": google_key,
             "X-Goog-FieldMask": "places.photos"
         }
-        body = {"textQuery": search_query, "maxResultCount": 1}
+        body = {
+            "textQuery": f"best tourist attractions in {search_query}", 
+            "maxResultCount": 5
+        }
         try:
-            resp = requests.post(url, headers=headers, json=body, timeout=5)
+            resp = requests.post(url, headers=headers, json=body, timeout=8)
             if resp.status_code == 200:
                 data = resp.json()
-                places = data.get("places", [])
-                if places and "photos" in places[0]:
-                    photos = places[0]["photos"]
-                    if photos:
-                        urls = []
-                        for photo in photos[:5]:
-                            photo_name = photo["name"]
-                            urls.append(f"https://places.googleapis.com/v1/{photo_name}/media?maxHeightPx=1080&maxWidthPx=1920&key={google_key}")
-                        return urls
+                urls = []
+                for place in data.get("places", []):
+                    # Filter: Only accept HD landscape photos (width > height AND min 1280px)
+                    good_photos = [
+                        p for p in place.get("photos", [])
+                        if p.get("widthPx", 0) >= 1280 and p.get("widthPx", 0) > p.get("heightPx", 0)
+                    ]
+                    # Take up to 2 HD photos per place
+                    for photo in good_photos[:2]:
+                        urls.append(f"https://places.googleapis.com/v1/{photo['name']}/media?maxHeightPx=1080&maxWidthPx=1920&key={google_key}")
+                return urls[:5]
         except Exception as e:
             print(f"Google Places photo error: {e}")
         return []
-
-    # 1. Try Unsplash
-    img_urls = fetch_image_unsplash(query)
+    # Extract the city name from "City Philippines"
+    city = query.replace(" Philippines", "").strip()
     
-    # 2. Try Google Places if Unsplash doesn't have it
-    if not img_urls:
-        clean_name = query.replace(" Philippines landscape", "").strip()
-        img_urls = fetch_google_place_photo(f"{clean_name} Philippines")
+    # List of Philippine places guaranteed to have stunning Unsplash photos
+    photogenic_places = [
+        "manila", "cebu", "palawan", "bohol", "siargao", "boracay", 
+        "baguio", "batanes", "la union", "davao", "vigan", "coron", 
+        "el nido", "tagaytay", "makati", "bgc", "batangas", "zambales"
+    ]
+    
+    is_photogenic = any(p in city.lower() for p in photogenic_places)
+    
+    print(f"[HeroImage] Request for '{city}' (Photogenic: {is_photogenic})")
 
-    # 3. Fallback to general
+    img_urls = []
+    if is_photogenic:
+        # Try specific city query first
+        img_urls = fetch_image_unsplash(f"{city} Philippines landscape")
+        if not img_urls:
+            img_urls = fetch_image_unsplash(f"{city} Philippines")
+    
+    # If not a famous tourist city (like Caloocan), OR if specific query failed,
+    # fallback to stunning generic Philippine landscapes so the app ALWAYS looks premium.
     if not img_urls:
-        img_urls = fetch_image_unsplash("Philippines beautiful landscape")
+        import random
+        generic_queries = [
+            "Philippines tropical beach travel", 
+            "Philippines beautiful nature", 
+            "Philippines mountains landscape", 
+            "Philippines island aerial"
+        ]
+        img_urls = fetch_image_unsplash(random.choice(generic_queries))
 
     url = img_urls[0] if img_urls else None
     return jsonify({"urls": img_urls, "url": url}), 200
+
+@app.route("/api/discover", methods=["GET"])
+def get_discover_photos():
+    unsplash_key = os.getenv("UNSPLASH_ACCESS_KEY")
+    if not unsplash_key:
+        return jsonify({"error": "No Unsplash key"}), 500
+        
+    location = request.args.get("location", "")
+    query_str = f"{location} philippines tourist spot" if location else "philippines tourist spot"
+        
+    url = "https://api.unsplash.com/photos/random"
+    headers = {"Authorization": f"Client-ID {unsplash_key}"}
+    params = {
+        "query": query_str,
+        "count": 20,
+        "orientation": "landscape"
+    }
+    
+    try:
+        resp = requests.get(url, headers=headers, params=params, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json() # Random endpoint returns a list directly
+            photos = []
+            for item in data:
+                photos.append({
+                    "id": item["id"],
+                    "url": item["urls"]["regular"],
+                    "title": item.get("description") or item.get("alt_description") or "Philippines Destination",
+                    "author": item["user"]["name"]
+                })
+            return jsonify({"photos": photos}), 200
+        else:
+            return jsonify({"error": "Unsplash API error"}), resp.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/reverse-geocode", methods=["GET"])
+def reverse_geocode():
+    lat = request.args.get("lat")
+    lon = request.args.get("lon")
+    if not lat or not lon:
+        return jsonify({"error": "Missing lat/lon"}), 400
+    try:
+        resp = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={"lat": lat, "lon": lon, "format": "json"},
+            headers={"User-Agent": "SunWise-App/1.0"},
+            timeout=5
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            address = data.get("address", {})
+            # Priority: state (province) > county > city > town
+            province = (
+                address.get("state") or
+                address.get("county") or
+                address.get("city") or
+                address.get("town") or
+                address.get("village") or
+                "Philippines"
+            )
+            # Clean up "Province of X" format
+            if province.lower().startswith("province of "):
+                province = province[12:]
+            return jsonify({"province": province}), 200
+        return jsonify({"province": "Philippines"}), 200
+    except Exception as e:
+        print(f"[ReverseGeocode] Error: {e}")
+        return jsonify({"province": "Philippines"}), 200
 
 @app.route("/api/place-details", methods=["POST"])
 def place_details():

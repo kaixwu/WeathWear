@@ -150,40 +150,56 @@ export default function Destinations() {
       </div>
 
       {/* Filters */}
-      <div className="filters-card" style={{ marginBottom: '28px' }}>
-        <div className="filter-row">
-          <span className="filter-label">Environment</span>
-          {["Any", "Indoor", "Outdoor"].map(e => (
-            <button key={e} className={`btn-chip ${envType === e ? "active" : ""}`} onClick={() => setEnvType(e)}>{e}</button>
-          ))}
-        </div>
-        <div className="filter-row">
-          <span className="filter-label">Category</span>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+      <div className="glass-card" style={{ marginBottom: '32px', padding: '24px' }}>
+        
+        <div style={{ marginBottom: '16px' }}>
+          <div className="section-label" style={{ marginBottom: '10px' }}>Category</div>
+          <div className="filter-scroll-container">
             {["Any", "Cafe", "Restaurant", "Museum", "Park", "Shopping", "Nature", "Entertainment", "Heritage"].map(p => (
-              <button key={p} className={`btn-chip ${prefType === p ? "active" : ""}`} onClick={() => setPrefType(p)}>{p}</button>
+              <button key={p} className={`glass-pill ${prefType === p ? "active" : ""}`} onClick={() => setPrefType(p)}>
+                {p}
+              </button>
             ))}
           </div>
         </div>
-        <div className="filter-row">
-          <span className="filter-label">Status</span>
-          {["Any", "Open", "Closed"].map(o => (
-            <button key={o} className={`btn-chip ${openFilter === o ? "active" : ""}`} onClick={() => setOpenFilter(o)}>
-              {o === "Open" ? "Open Now" : o === "Closed" ? "Closed" : o}
-            </button>
-          ))}
-        </div>
-        <div className="filter-row">
-          <span className="filter-label">Radius</span>
-          <input
-            type="range" min="5000" max="50000" step="5000"
-            value={radius}
-            onChange={e => setRadius(parseInt(e.target.value))}
-            style={{ flex: 1, maxWidth: '280px', accentColor: 'var(--accent-blue)' }}
-          />
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent-blue)', minWidth: '52px' }}>
-            {radius / 1000} km
-          </span>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px' }}>
+          <div style={{ flex: '1 1 200px' }}>
+            <div className="section-label" style={{ marginBottom: '10px' }}>Environment</div>
+            <div className="filter-scroll-container">
+              {["Any", "Indoor", "Outdoor"].map(e => (
+                <button key={e} className={`glass-pill ${envType === e ? "active" : ""}`} onClick={() => setEnvType(e)}>
+                  {e}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ flex: '1 1 200px' }}>
+            <div className="section-label" style={{ marginBottom: '10px' }}>Status</div>
+            <div className="filter-scroll-container">
+              {["Any", "Open", "Closed"].map(o => (
+                <button key={o} className={`glass-pill ${openFilter === o ? "active" : ""}`} onClick={() => setOpenFilter(o)}>
+                  {o === "Open" ? "Open Now" : o === "Closed" ? "Closed" : o}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ flex: '1 1 280px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div className="section-label" style={{ marginBottom: '10px' }}>Search Radius</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '0 8px' }}>
+              <input
+                type="range" min="2000" max="20000" step="2000"
+                value={radius}
+                onChange={e => setRadius(parseInt(e.target.value))}
+                style={{ flex: 1, accentColor: 'var(--accent-teal)' }}
+              />
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--accent-teal)', minWidth: '60px' }}>
+                {radius / 1000} km
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
