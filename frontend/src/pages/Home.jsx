@@ -56,38 +56,8 @@ export default function Home() {
       return;
     }
 
-    const queryMap = {
-      manila: 'manila philippines city skyline',
-      makati: 'makati skyline',
-      taguig: 'bgc taguig cityscape',
-      bgc: 'bonifacio global city philippines',
-      quezon: 'quezon city philippines',
-      cebu: 'cebu city philippines cityscape',
-      baguio: 'baguio pine mountains fog',
-      davao: 'davao city philippines',
-      palawan: 'palawan beach turquoise',
-      'puerto princesa': 'puerto princesa philippines',
-      boracay: 'boracay beach white sand',
-      tagaytay: 'tagaytay volcano lake',
-      batangas: 'batangas philippines beach',
-      iloilo: 'iloilo heritage philippines',
-      bohol: 'bohol chocolate hills',
-      zamboanga: 'zamboanga philippines',
-      bacolod: 'bacolod philippines',
-      cagayan: 'cagayan philippines landscape',
-      vigan: 'vigan heritage philippines',
-      siargao: 'siargao surfing tropical',
-      coron: 'coron lagoon philippines'
-    };
-
-    const lower = name.toLowerCase();
-    let query = 'philippines tropical landscape sunset';
-    for (const [cityName, q] of Object.entries(queryMap)) {
-      if (lower.includes(cityName)) {
-        query = q;
-        break;
-      }
-    }
+    const cleanName = name.split(',')[0].trim();
+    const query = `${cleanName} Philippines landscape`;
 
     axios.post('/api/hero-image', { query })
       .then(res => {
