@@ -44,28 +44,40 @@ export default function Home() {
   const [routingLoading, setRoutingLoading] = useState(false);
   const [routeInfo, setRouteInfo] = useState(null);
   const [routeDest, setRouteDest] = useState(null);
-  const [heroImgUrl, setHeroImgUrl] = useState('');
+  const [heroImgUrls, setHeroImgUrls] = useState([]);
+  const [currentImgIndex, setCurrentImgIndex] = useState(0);
 
   const displayCity = (userCity || city || '').toUpperCase();
 
   // ── Hero image effect (uses Unsplash via backend proxy) ─────────────────
   useEffect(() => {
     const name = userCity || city;
-    if (!name) {
-      setHeroImgUrl('');
-      return;
-    }
-
     const cleanName = name.split(',')[0].trim();
     const query = `${cleanName} Philippines landscape`;
 
     axios.post('/api/hero-image', { query })
       .then(res => {
-        if (res.data.url) setHeroImgUrl(res.data.url);
-        else setHeroImgUrl('');
+        if (res.data.urls && res.data.urls.length > 0) {
+          setHeroImgUrls(res.data.urls);
+          setCurrentImgIndex(0);
+        } else if (res.data.url) {
+          setHeroImgUrls([res.data.url]);
+          setCurrentImgIndex(0);
+        } else {
+          setHeroImgUrls([]);
+        }
       })
-      .catch(() => setHeroImgUrl(''));
+      .catch(() => setHeroImgUrls([]));
   }, [city, userCity]);
+
+  // Auto slide effect
+  useEffect(() => {
+    if (heroImgUrls.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentImgIndex(prev => (prev + 1) % heroImgUrls.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [heroImgUrls]);
 
   const handleTyping = async (e) => {
     const val = e.target.value;
@@ -155,11 +167,12 @@ export default function Home() {
   const renderHero = () => (
     <div className="hero-section">
       {/* Background image */}
-      {heroImgUrl && (
+      {heroImgUrls.length > 0 && (
         <img
+          key={heroImgUrls[currentImgIndex]} // force re-render for transition if needed, though CSS transition is better on opacity
           className="hero-bg-img"
-          style={{ zIndex: 1 }}
-          src={heroImgUrl}
+          style={{ zIndex: 1, transition: 'opacity 1s ease-in-out' }}
+          src={heroImgUrls[currentImgIndex]}
           alt={displayCity || 'Philippines'}
           onError={e => { e.target.style.display = 'none'; }}
         />
@@ -175,10 +188,17 @@ export default function Home() {
 
       {/* Decorative indicators (right side) */}
       <div className="hero-indicators">
-        {['01', '02', '03', '04', '05'].map((n, i) => (
-          <div key={n} className={`hero-indicator-num ${i === 2 ? 'active' : ''}`}>{n}</div>
-        ))}
-        <div className="hero-indicator-line" />
+        {heroImgUrls.length > 1 ? heroImgUrls.map((_, i) => (
+          <div 
+            key={i} 
+            className={`hero-indicator-num ${i === currentImgIndex ? 'active' : ''}`}
+            onClick={() => setCurrentImgIndex(i)}
+            style={{ cursor: 'pointer', transition: '0.3s' }}
+          >
+            {String(i + 1).padStart(2, '0')}
+          </div>
+        )) : null}
+        {heroImgUrls.length > 1 && <div className="hero-indicator-line" />}
       </div>
 
       {/* Content overlay */}

@@ -301,22 +301,22 @@ def hero_image():
     google_key = os.getenv("GOOGLE_PLACES_API_KEY")
 
     def fetch_image_unsplash(search_query):
-        if not unsplash_key: return None
+        if not unsplash_key: return []
         url = "https://api.unsplash.com/photos/random"
         headers = {"Authorization": f"Client-ID {unsplash_key}"}
-        params = {"query": search_query, "orientation": "landscape", "count": 1, "w": 1920, "q": 80}
+        params = {"query": search_query, "orientation": "landscape", "count": 5, "w": 1920, "q": 80}
         try:
             resp = requests.get(url, headers=headers, params=params, timeout=5)
             if resp.status_code == 200:
                 resp_data = resp.json()
                 if isinstance(resp_data, list) and len(resp_data) > 0:
-                    return resp_data[0]["urls"]["raw"] + "&w=1920&q=80"
+                    return [p["urls"]["raw"] + "&w=1920&q=80" for p in resp_data]
         except Exception as e:
             print(f"Unsplash error: {e}")
-        return None
+        return []
 
     def fetch_google_place_photo(search_query):
-        if not google_key: return None
+        if not google_key: return []
         url = "https://places.googleapis.com/v1/places:searchText"
         headers = {
             "Content-Type": "application/json",
@@ -332,26 +332,29 @@ def hero_image():
                 if places and "photos" in places[0]:
                     photos = places[0]["photos"]
                     if photos:
-                        best_photo = max(photos[:5], key=lambda p: (p.get("widthPx", 0) or 0) * (p.get("heightPx", 0) or 0), default=photos[0])
-                        photo_name = best_photo["name"]
-                        return f"https://places.googleapis.com/v1/{photo_name}/media?maxHeightPx=1080&maxWidthPx=1920&key={google_key}"
+                        urls = []
+                        for photo in photos[:5]:
+                            photo_name = photo["name"]
+                            urls.append(f"https://places.googleapis.com/v1/{photo_name}/media?maxHeightPx=1080&maxWidthPx=1920&key={google_key}")
+                        return urls
         except Exception as e:
             print(f"Google Places photo error: {e}")
-        return None
+        return []
 
     # 1. Try Unsplash
-    img_url = fetch_image_unsplash(query)
+    img_urls = fetch_image_unsplash(query)
     
     # 2. Try Google Places if Unsplash doesn't have it
-    if not img_url:
+    if not img_urls:
         clean_name = query.replace(" Philippines landscape", "").strip()
-        img_url = fetch_google_place_photo(f"{clean_name} Philippines")
+        img_urls = fetch_google_place_photo(f"{clean_name} Philippines")
 
     # 3. Fallback to general
-    if not img_url:
-        img_url = fetch_image_unsplash("Philippines beautiful landscape")
+    if not img_urls:
+        img_urls = fetch_image_unsplash("Philippines beautiful landscape")
 
-    return jsonify({"url": img_url}), 200
+    url = img_urls[0] if img_urls else None
+    return jsonify({"urls": img_urls, "url": url}), 200
 
 @app.route("/api/place-details", methods=["POST"])
 def place_details():

@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import axios from "axios";
 import { useAuth } from "../AuthContext";
 import { useData } from "../DataContext";
-import { CalendarCheck, Zap, Trash2, ListTodo, Sparkles, Send, MapPin, Clock, Car } from "lucide-react";
+import { CalendarCheck, Zap, Trash2, ListTodo, Sparkles, Send, MapPin, Clock, Car, Download } from "lucide-react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
 export default function Planner() {
   const { token } = useAuth();
@@ -17,6 +19,24 @@ export default function Planner() {
   const [searchLocation, setSearchLocation] = useState("");
   const [aiSuggestionLoading, setAiSuggestionLoading] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState(null);
+  const exportRef = useRef(null);
+
+  const handleExportPDF = async () => {
+    if (!exportRef.current) return;
+    try {
+      const canvas = await html2canvas(exportRef.current, { scale: 2, backgroundColor: '#071428' });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`SunWise_Itinerary_${getLocalDateString()}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to export PDF.");
+    }
+  };
 
   const deleteItinerary = async (id) => {
     try {
@@ -194,18 +214,31 @@ export default function Planner() {
         <div>
           {/* AI Generate Button */}
           {todayItins.length > 0 && (
-            <div style={{ marginBottom: "20px" }}>
-              <button
-                onClick={handleGenerateItinerary}
-                disabled={genLoading}
-                style={{
-                  padding: "12px 24px", background: "linear-gradient(135deg, var(--accent-blue), var(--accent-teal))",
-                  border: "none", borderRadius: "12px", color: "#fff", fontWeight: "700",
-                  fontSize: "1rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px",
-                }}
-              >
-                <Sparkles size={20} /> {genLoading ? "Generating..." : "Generate Smart Itinerary"}
-              </button>
+            <>
+              <div style={{ marginBottom: "20px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                <button
+                  onClick={handleGenerateItinerary}
+                  disabled={genLoading}
+                  style={{
+                    padding: "12px 24px", background: "linear-gradient(135deg, var(--accent-blue), var(--accent-teal))",
+                    border: "none", borderRadius: "12px", color: "#fff", fontWeight: "700",
+                    fontSize: "1rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px",
+                  }}
+                >
+                  <Sparkles size={20} /> {genLoading ? "Generating..." : "Generate Smart Itinerary"}
+                </button>
+
+                <button
+                  onClick={handleExportPDF}
+                  style={{
+                    padding: "12px 24px", background: "rgba(56,189,248,0.1)", border: "1px solid var(--accent-blue)",
+                    borderRadius: "12px", color: "var(--accent-blue)", fontWeight: "700",
+                    fontSize: "1rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px",
+                  }}
+                >
+                  <Download size={20} /> Export to PDF
+                </button>
+              </div>
 
               {genLoading && <div className="skeleton" style={{ height: "80px", marginTop: "16px" }} />}
 
@@ -268,7 +301,7 @@ export default function Planner() {
                   </div>
                 </div>
               )}
-            </div>
+            </>
           )}
 
           {todayItins.length === 0 && !generatedPlan ? (
@@ -276,8 +309,12 @@ export default function Planner() {
               No plan scheduled for today. Use Destinations or ask AI below!
             </div>
           ) : (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
-              {todayItins.map((it) => (
+            <div ref={exportRef} style={{ display: "flex", flexDirection: "column", gap: "16px", background: "#0a142c", padding: "20px", borderRadius: "16px" }}>
+              <h2 style={{ color: "var(--accent-blue)", margin: "0 0 8px", fontFamily: "var(--font-heading)" }}>
+                SunWise Itinerary - {getLocalDateString()}
+              </h2>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                {todayItins.map((it) => (
                 <div key={it.id} className="glass-card" style={{ flex: "1 1 300px", padding: "16px", minWidth: "280px" }}>
                   <div style={{ fontWeight: "700", fontSize: "1.1rem", marginBottom: "8px" }}>
                     {it.date_str} {it.time_str && `at ${it.time_str}`}
@@ -306,6 +343,7 @@ export default function Planner() {
                   </button>
                 </div>
               ))}
+              </div>
             </div>
           )}
 
