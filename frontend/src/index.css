@@ -1171,60 +1171,171 @@ h1, h2, h3, .font-heading {
   cursor: not-allowed;
 }
 
-/* Discover Masonry Grid */
-.masonry-grid {
-  column-count: 3;
-  column-gap: 20px;
+/* ══════════════════════════════════════════════
+   MOBILE RESPONSIVE BREAKPOINTS
+══════════════════════════════════════════════ */
+
+/* ── NAVBAR ─────────────────────────────────── */
+@media (max-width: 768px) {
+  .nav-desktop-links { display: none !important; }
+  .nav-desktop-right  { display: none !important; }
+  .nav-hamburger      { display: flex !important; }
 }
-@media (max-width: 900px) { .masonry-grid { column-count: 2; } }
-@media (max-width: 600px) { .masonry-grid { column-count: 1; } }
-.masonry-item {
-  break-inside: avoid;
-  margin-bottom: 20px;
-  border-radius: 16px;
-  overflow: hidden;
-  position: relative;
-  cursor: pointer;
-  transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
-  background: rgba(255,255,255,0.02);
+
+/* ── HERO ───────────────────────────────────── */
+@media (max-width: 768px) {
+  .hero-section {
+    height: calc(100svh - 75px);
+    min-height: 480px;
+  }
+
+  .hero-content {
+    padding: 0 20px clamp(40px, 8vh, 70px);
+  }
+
+  .hero-city-name {
+    font-size: clamp(2.8rem, 14vw, 5rem) !important;
+    margin-bottom: 16px;
+  }
+
+  .hero-weather-row {
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .hero-temp { font-size: 1.8rem; }
+
+  .hero-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .hero-btn { width: 100%; justify-content: center; }
+
+  .hero-indicators { display: none; }
+
+  .hero-search-overlay {
+    padding: 0 20px clamp(40px, 8vh, 80px);
+  }
 }
-.masonry-item:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+
+/* ── HOME CONTENT SECTION ───────────────────── */
+@media (max-width: 900px) {
+  .home-content-section {
+    flex-direction: column;
+    padding: 24px 16px 40px;
+    gap: 20px;
+  }
+
+  .home-sidebar {
+    flex: unset;
+    width: 100%;
+  }
+
+  .home-map-container {
+    flex: unset;
+    width: 100%;
+    height: 380px;
+  }
 }
-.masonry-img {
-  width: 100%;
-  display: block;
-  transition: transform 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
+
+/* ── DESTINATIONS ───────────────────────────── */
+@media (max-width: 768px) {
+  .dest-page { padding: 0 12px 48px; }
+
+  .dest-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px;
+  }
+
+  .dest-card { height: 300px; }
+
+  .dest-card-name { font-size: 1.3rem; }
+
+  .filters-card { padding: 16px; }
+
+  .filter-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+    gap: 8px;
+  }
+  .filter-row::-webkit-scrollbar { display: none; }
+  .filter-label { min-width: 70px; font-size: 0.68rem; }
+
+  /* Modal full-screen on mobile */
+  .modal-panel {
+    max-width: 100% !important;
+    max-height: 95vh;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-hero { height: 200px; }
+  .modal-body { padding: 16px 18px 24px; }
+  .modal-action-row { flex-direction: column; gap: 8px; }
+
+  .sched-modal-panel {
+    max-width: 100% !important;
+    border-radius: 20px 20px 0 0;
+  }
+  .sched-modal-backdrop { align-items: flex-end; padding: 0; }
 }
-.masonry-item:hover .masonry-img {
-  transform: scale(1.05);
+
+/* ── WEATHER PAGE ───────────────────────────── */
+@media (max-width: 768px) {
+  .weather-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
 }
-.masonry-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(7, 14, 28, 0.9) 0%, rgba(7, 14, 28, 0.4) 40%, transparent 100%);
-  opacity: 0;
-  transition: opacity 0.4s;
-  display: flex;
-  align-items: flex-end;
-  padding: 24px;
+
+/* ── PLANNER PAGE ───────────────────────────── */
+@media (max-width: 768px) {
+  .segmented-control { gap: 2px; }
+  .segmented-btn { font-size: 0.78rem; padding: 10px 4px; gap: 4px; }
+
+  .ai-prompt-box { flex-direction: row; }
+
+  .timeline-container { padding-left: 22px; }
 }
-.masonry-item:hover .masonry-overlay {
-  opacity: 1;
+
+/* ── GENERAL PAGE PADDING ───────────────────── */
+@media (max-width: 768px) {
+  /* Pages that use max-width containers */
+  div[style*="max-width: 1200px"],
+  div[style*="max-width: 1280px"] {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  /* Glass cards inside pages */
+  .glass-card { padding: 16px; }
+
+  /* Auth pages stay centered */
+  .auth-container { padding: 16px; }
 }
-.masonry-title {
-  font-family: var(--font-display);
-  font-size: 1.8rem;
-  color: #fff;
-  letter-spacing: 0.03em;
-  margin-bottom: 4px;
+
+/* ── MY TRIPS PAGE ──────────────────────────── */
+@media (max-width: 900px) {
+  .my-trips-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .my-trips-bottom-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
-.masonry-subtitle {
-  font-family: var(--font-body);
-  font-size: 0.85rem;
-  color: var(--accent-teal);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+
+@media (max-width: 480px) {
+  .my-trips-stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
 }

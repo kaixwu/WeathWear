@@ -8,7 +8,7 @@ import Home from "./pages/Home";
 import Weather from "./pages/Weather";
 import Destinations from "./pages/Destinations";
 import Planner from "./pages/Planner";
-import Discover from "./pages/Discover";
+import MyTrips from "./pages/MyTrips";
 import Navbar from "./components/Navbar";
 
 
@@ -33,6 +33,7 @@ export default function App() {
         <Route path="/weather" element={<Weather />} />
         <Route path="/destinations" element={<Destinations />} />
         <Route path="/planner" element={<Planner />} />
+        <Route path="/my-trips" element={<MyTrips />} />
         {role === "admin" && <Route path="/admin" element={<Admin />} />}
         
         {/* Default route redirect */}
