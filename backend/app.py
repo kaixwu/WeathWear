@@ -482,10 +482,101 @@ def place_details():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ── GOOGLE PLACES FETCH (unchanged) ─────────────────────────────────────────
-def fetch_google_places(lat, lon, radius, category="Any"):
+# ── GOOGLE PLACES TEXT SEARCH (keyword-based, used by text-prompt itinerary) ─
+def fetch_google_places_text_search(lat, lon, radius, keyword):
+    """Uses Google Places Text Search API to find places matching a keyword near coordinates."""
     if not google_places_key:
         return []
+    url = "https://places.googleapis.com/v1/places:searchText"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": google_places_key,
+        "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location,places.primaryType,places.types,places.regularOpeningHours,places.currentOpeningHours,places.rating,places.userRatingCount,places.photos"
+    }
+    body = {
+        "textQuery": keyword,
+        "locationBias": {
+            "circle": {
+                "center": {"latitude": lat, "longitude": lon},
+                "radius": float(radius)
+            }
+        },
+        "maxResultCount": 20
+    }
+    try:
+        resp = requests.post(url, headers=headers, json=body, timeout=10)
+        if resp.status_code != 200:
+            print(f"[TextSearch] Error {resp.status_code}: {resp.text[:200]}")
+            return []
+        data = resp.json()
+        results = []
+        for place in data.get("places", []):
+            name = place.get("displayName", {}).get("text", "")
+            if not name:
+                continue
+            loc = place.get("location", {})
+            d_lat = loc.get("latitude")
+            d_lon = loc.get("longitude")
+            if not d_lat or not d_lon:
+                continue
+            dist = round(haversine(lat, lon, d_lat, d_lon), 1)
+            primary_type = place.get("primaryType", "")
+            category_mapped = "Restaurant"
+            dest_type = "Indoor"
+            if "cafe" in primary_type:
+                category_mapped = "Cafe"
+            elif "park" in primary_type:
+                category_mapped = "Park"; dest_type = "Outdoor"
+            elif "museum" in primary_type:
+                category_mapped = "Museum"
+            elif "tourist_attraction" in primary_type:
+                category_mapped = "Attraction"; dest_type = "Outdoor"
+            elif "shopping" in primary_type:
+                category_mapped = "Shopping"
+            # Opening hours
+            is_open = None
+            oh = place.get("currentOpeningHours") or place.get("regularOpeningHours")
+            if oh:
+                is_open = oh.get("openNow")
+            # Photo
+            photo_url = None
+            photos = place.get("photos", [])
+            if photos:
+                photo_ref = photos[0].get("name", "")
+                if photo_ref:
+                    photo_url = f"https://places.googleapis.com/v1/{photo_ref}/media?maxWidthPx=800&key={google_places_key}"
+            results.append({
+                "name": name,
+                "address": place.get("formattedAddress", ""),
+                "lat": d_lat,
+                "lon": d_lon,
+                "distance": dist,
+                "category": category_mapped,
+                "envType": dest_type,
+                "rating": place.get("rating"),
+                "ratingCount": place.get("userRatingCount", 0),
+                "isOpen": is_open,
+                "photoUrl": photo_url,
+                "travelMins": 0,
+                "score": 0,
+                "matchReasons": []
+            })
+        print(f"[TextSearch] '{keyword}' near ({lat},{lon}) → {len(results)} results")
+        return results
+    except Exception as e:
+        print(f"[TextSearch] Exception: {e}")
+        return []
+
+# ── GOOGLE PLACES FETCH (unchanged) ─────────────────────────────────────────
+def fetch_google_places(lat, lon, radius, category="Any", keyword=None):
+    if not google_places_key:
+        return []
+
+    # If a keyword is provided (from text-prompt), use Text Search instead of Nearby Search
+    # This lets users search for specific things like "chicken restaurant" or "coffee shop"
+    if keyword and keyword.strip():
+        return fetch_google_places_text_search(lat, lon, radius, keyword.strip())
+
     type_mapping = {
         "Cafe": ["cafe"],
         "Restaurant": ["restaurant"],
@@ -847,8 +938,12 @@ def generate_itinerary_text():
     if not target_lat or not target_lon:
         return jsonify({"error": "No location available"}), 400
 
-    # 2. Fetch top nearby places around the target coordinates
-    top_places = fetch_google_places(target_lat, target_lon, 10000, "Any")
+    # 2. Fetch nearby places using the user's prompt as a keyword
+    #    This ensures "chicken restaurant" finds actual restaurants, not parks
+    top_places = fetch_google_places(target_lat, target_lon, 10000, "Any", keyword=prompt_text)
+    if not top_places:
+        # Fallback: search without keyword if no results found
+        top_places = fetch_google_places(target_lat, target_lon, 10000, "Any")
     if not top_places:
         return jsonify({"error": "No places found nearby"}), 404
 
