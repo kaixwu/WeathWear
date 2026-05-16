@@ -491,7 +491,7 @@ def fetch_google_places_text_search(lat, lon, radius, keyword):
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": google_places_key,
-        "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location,places.primaryType,places.types,places.regularOpeningHours,places.currentOpeningHours,places.rating,places.userRatingCount,places.photos"
+        "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location,places.primaryType,places.types,places.regularOpeningHours,places.currentOpeningHours,places.rating,places.userRatingCount,places.photos,places.reviews"
     }
     body = {
         "textQuery": keyword,
@@ -545,6 +545,18 @@ def fetch_google_places_text_search(lat, lon, radius, keyword):
                 photo_ref = photos[0].get("name", "")
                 if photo_ref:
                     photo_url = f"https://places.googleapis.com/v1/{photo_ref}/media?maxWidthPx=800&key={google_places_key}"
+            # Opening hours display text
+            hours_display = None
+            if oh and oh.get("weekdayDescriptions"):
+                hours_display = "; ".join(oh["weekdayDescriptions"][:3])
+            # Reviews
+            reviews_list = []
+            for rev in place.get("reviews", [])[:5]:
+                author = rev.get("authorAttribution", {}).get("displayName", "Anonymous")
+                text   = rev.get("text", {}).get("text", "")
+                rtime  = rev.get("relativePublishTimeDescription", "")
+                if text:
+                    reviews_list.append({"author": author, "text": text, "time": rtime})
             results.append({
                 "name": name,
                 "address": place.get("formattedAddress", ""),
@@ -556,7 +568,9 @@ def fetch_google_places_text_search(lat, lon, radius, keyword):
                 "rating": place.get("rating"),
                 "ratingCount": place.get("userRatingCount", 0),
                 "isOpen": is_open,
+                "hoursDisplay": hours_display,
                 "photoUrl": photo_url,
+                "reviews": reviews_list,
                 "travelMins": 0,
                 "score": 0,
                 "matchReasons": []
