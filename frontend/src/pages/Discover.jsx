@@ -33,7 +33,7 @@ export default function Discover() {
           <Compass size={16} /> Travel Inspiration
         </div>
         <h1 className="font-heading" style={{ fontSize: "clamp(2.5rem, 6vw, 4.5rem)", margin: "0 0 16px", letterSpacing: "0.02em" }}>
-          Discover The <span className="text-gradient-blue">Philippines</span>
+          Discover <span className="text-gradient-blue">Destinations</span>
         </h1>
         <p style={{ color: "var(--text-muted)", fontSize: "1.1rem", maxWidth: "600px", margin: "0 auto" }}>
           Explore breathtaking landscapes and hidden gems. Let these destinations inspire your next adventure.
@@ -60,8 +60,8 @@ export default function Discover() {
                   <div className="masonry-title" style={{ fontSize: "1.4rem" }}>
                     {photo.title.length > 40 ? photo.title.substring(0, 40) + "..." : photo.title}
                   </div>
-                  <div className="masonry-subtitle" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    <MapPin size={12} /> Philippines
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.15)", padding: "4px 8px", borderRadius: "12px" }}>
+                    <MapPin size={12} /> Global
                   </div>
                 </div>
               </div>

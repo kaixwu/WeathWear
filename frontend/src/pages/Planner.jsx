@@ -163,9 +163,6 @@ export default function Planner() {
         : { temp: 30, rain_prob: 0, condition: "Clear" };
 
       let locationToSend = searchLocation.trim();
-      if (locationToSend && !/(philippines|ph\b|manila|cebu|davao|quezon|makati|tagaytay|baguio)/i.test(locationToSend)) {
-        locationToSend = `${locationToSend}, Philippines`;
-      }
 
       const res = await axios.post("/api/generate-itinerary-text", {
         prompt: aiPrompt,
@@ -206,8 +203,8 @@ export default function Planner() {
       </div>
 
       {/* ------ Segmented Tabs ------ */}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: "30px" }}>
-        <div className="segmented-control" style={{ width: "100%", maxWidth: "400px" }}>
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: "40px" }}>
+        <div className="segmented-control glass-card" style={{ width: "100%", maxWidth: "480px", padding: "8px", display: "flex", gap: "8px", border: "1px solid var(--glass-border)" }}>
           <button
             onClick={() => setActiveTab("today")}
             className={`segmented-btn ${activeTab === "today" ? "active" : ""}`}
@@ -264,11 +261,11 @@ export default function Planner() {
                 </button>
               </div>
 
-              {genLoading && <div className="skeleton" style={{ height: "80px", marginTop: "16px" }} />}
+              {genLoading && <div className="skeleton" style={{ height: "80px", marginTop: "24px" }} />}
 
               {generatedPlan && (
-                <div className="glass-card" style={{ marginTop: "16px", padding: "20px", background: "rgba(15,23,42,0.6)", border: "1px solid var(--accent-teal)" }}>
-                  <h4 style={{ margin: "0 0 12px", color: "var(--accent-teal)" }}>✨ AI‑optimized Route</h4>
+                <div className="glass-card" style={{ marginTop: "24px", padding: "28px" }}>
+                  <h4 style={{ margin: "0 0 16px", color: "var(--accent-teal)" }}>✨ AI‑optimized Route</h4>
                   <p style={{ color: "#e2e8f0", fontSize: "0.9rem", marginBottom: "12px" }}>
                     {generatedPlan.explanation}
                     {generatedPlan.best_start_time && <> Suggested start: <strong>{generatedPlan.best_start_time}</strong></>}
@@ -335,7 +332,7 @@ export default function Planner() {
               No plan scheduled for today. Use Destinations or ask AI below!
             </div>
           ) : (
-            <div ref={exportRef} style={{ display: "flex", flexDirection: "column", gap: "16px", background: "#0a142c", padding: "20px", borderRadius: "16px" }}>
+            <div ref={exportRef} className="glass-card" style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "32px", marginTop: "32px" }}>
               <h2 style={{ color: "var(--accent-blue)", margin: "0 0 8px", fontFamily: "var(--font-heading)" }}>
                 SunWise Itinerary - {getLocalDateString()}
               </h2>
@@ -374,13 +371,14 @@ export default function Planner() {
           )}
 
           {/* Text Prompt Section */}
-          <div style={{ marginTop: "50px" }}>
-            <h3 className="font-heading" style={{ marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", fontSize: "1.4rem", letterSpacing: "0.05em" }}>
+          <div style={{ marginTop: "60px" }}>
+            <h3 className="font-heading" style={{ marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px", fontSize: "1.4rem", letterSpacing: "0.05em" }}>
               <Sparkles size={24} color="var(--accent-teal)" /> AI Travel Assistant
             </h3>
             
-            <div className="ai-prompt-box">
-              <input
+            <div style={{ position: "relative", zIndex: 10 }}>
+              <div className="ai-prompt-box">
+                <input
                 className="ai-input"
                 type="text"
                 placeholder="e.g. A relaxing 3-stop nature trip near Tagaytay..."
@@ -450,6 +448,7 @@ export default function Planner() {
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       )}

@@ -76,7 +76,7 @@ export default function Weather() {
         <div className="glass-card" style={{ marginBottom: "32px", borderLeft: "4px solid var(--danger)", background: "rgba(239, 68, 68, 0.05)", padding: "20px 24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
             <AlertTriangle size={24} color="var(--danger)" />
-            <h3 className="font-heading" style={{ fontSize: "1.15rem", margin: 0, color: "var(--danger)" }}>GDACS Disaster Advisory (Philippines)</h3>
+            <h3 className="font-heading" style={{ fontSize: "1.15rem", margin: 0, color: "var(--danger)" }}>GDACS Disaster Advisory</h3>
           </div>
           {disasters.map((d, i) => (
             <div key={i} style={{ padding: "12px", background: "rgba(0,0,0,0.2)", borderRadius: "8px", marginBottom: "8px" }}>
@@ -96,7 +96,7 @@ export default function Weather() {
           const dateKey = f.dt_txt.split(" ")[0];
           const isSelected = selectedDate === dateKey;
           return (
-            <div key={i} onClick={() => setSelectedDate(isSelected ? null : dateKey)} className="glass-card" style={{ flex: "1", minWidth: "130px", textAlign: "center", padding: "20px 16px", cursor: "pointer", border: isSelected ? "2px solid var(--accent-blue)" : "1px solid var(--glass-border)", transition: "all 0.2s" }}>
+            <div key={i} onClick={() => setSelectedDate(isSelected ? null : dateKey)} className={`glass-card tilt-card ${isSelected ? 'active-forecast' : ''}`} style={{ flex: "1", minWidth: "130px", textAlign: "center", padding: "20px 16px", cursor: "pointer", border: isSelected ? "2px solid var(--accent-blue)" : "1px solid var(--glass-border)" }}>
               <div style={{ fontSize: "1rem", color: "var(--text-main)", fontWeight: "600" }}>{new Date(f.dt_txt).toLocaleDateString('en-US', { weekday: 'long' })}</div>
               <div style={{ display: "flex", justifyContent: "center", margin: "16px 0" }}>{getWeatherIcon(f.weather[0].description, 40)}</div>
               <div style={{ fontWeight: "700", fontSize: "1.2rem", color: "var(--accent-teal)" }}>{Math.round(f.main.temp)}°C</div>

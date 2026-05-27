@@ -60,21 +60,19 @@ export default function Home() {
         const parts = userCity.split(',').map(p => p.trim());
         let cleanName = parts[0];
         if (parts.length >= 3) {
-          cleanName = parts[parts.length - 2].toLowerCase().includes('philippines')
-            ? parts[parts.length - 3]
-            : parts[parts.length - 2];
+          cleanName = parts[parts.length - 2];
         } else if (parts.length === 2) {
-          cleanName = parts[1].toLowerCase().includes('philippines') ? parts[0] : parts[1];
+          cleanName = parts[0];
         }
-        query = `${cleanName} Philippines`;
+        query = `${cleanName}`;
       } else if (city && currentCoords) {
         // Auto-detected GPS — reverse geocode to get province, not exact city
         try {
           const geoRes = await axios.get(`/api/reverse-geocode?lat=${currentCoords.lat}&lon=${currentCoords.lon}`);
-          const province = geoRes.data.province || "Philippines";
-          query = `${province} Philippines`;
+          const province = geoRes.data.province || "Unknown Location";
+          query = `${province}`;
         } catch {
-          query = "Philippines beautiful travel";
+          query = "beautiful landscape travel";
         }
       } else {
         return;
@@ -201,7 +199,7 @@ export default function Home() {
           className="hero-bg-img"
           style={{ zIndex: 1, transition: 'opacity 1s ease-in-out' }}
           src={heroImgUrls[currentImgIndex]}
-          alt={displayCity || 'Philippines'}
+          alt={displayCity || 'Location'}
           onError={e => { e.target.style.display = 'none'; }}
         />
       )}
@@ -291,7 +289,7 @@ export default function Home() {
         /* Has data: full hero */
         <div className="hero-content" style={{ zIndex: 10 }}>
           <div className="hero-eyebrow">
-            <MapPin size={12} /> Discover Philippines
+            <MapPin size={12} /> Discover Destinations
           </div>
           <div
             className="hero-city-name"
@@ -434,7 +432,7 @@ export default function Home() {
           </div>
 
           {/* Map */}
-          <div className="home-map-container">
+          <div className="home-map-container map-breathe">
             <MapContainer
               center={[currentCoords.lat, currentCoords.lon]}
               zoom={13}

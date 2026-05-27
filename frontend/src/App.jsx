@@ -10,6 +10,7 @@ import Destinations from "./pages/Destinations";
 import Planner from "./pages/Planner";
 import Discover from "./pages/Discover";
 import Navbar from "./components/Navbar";
+import WeatherEffects from "./components/WeatherEffects";
 
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
 
   return (
     <DataProvider>
+      <WeatherEffects />
       <Navbar />
       <Routes>
         <Route path="/home" element={<Home />} />

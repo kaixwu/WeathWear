@@ -248,6 +248,8 @@ import xml.etree.ElementTree as ET
 @app.route("/api/disasters", methods=["GET"])
 @jwt_required()
 def get_disasters():
+    lat_str = request.args.get("lat")
+    lon_str = request.args.get("lon")
     try:
         r = requests.get("https://www.gdacs.org/xml/rss.xml", timeout=10)
         r.raise_for_status()
@@ -256,8 +258,47 @@ def get_disasters():
         for item in root.findall(".//item"):
             title = item.findtext("title", "")
             desc = item.findtext("description", "")
-            if "Philippines" in title or "Philippines" in desc:
-                disasters.append({"title": title, "description": desc})
+            
+            # Find geo:Point if available
+            geo_lat, geo_lon = None, None
+            for child in item:
+                if 'Point' in child.tag:
+                    for coord in child:
+                        if 'lat' in coord.tag: geo_lat = float(coord.text)
+                        if 'long' in coord.tag: geo_lon = float(coord.text)
+
+            is_relevant = False
+            
+            # If user provided coords and disaster has coords, check distance (e.g., within 1000km)
+            if lat_str and lon_str and geo_lat is not None and geo_lon is not None:
+                dist = haversine(float(lat_str), float(lon_str), geo_lat, geo_lon)
+                if dist <= 300:
+                    is_relevant = True
+            else:
+                # Fallback if no coords: we just return nothing or global alerts. 
+                # Since we want local alerts, we skip global ones without coords.
+                pass
+
+            if is_relevant:
+                # Get specific city/province via Nominatim for the disaster
+                disaster_location = ""
+                try:
+                    nom_resp = requests.get(
+                        "https://nominatim.openstreetmap.org/reverse",
+                        params={"lat": geo_lat, "lon": geo_lon, "format": "json"},
+                        headers={"User-Agent": "SunWise-App/1.0"},
+                        timeout=5
+                    )
+                    if nom_resp.status_code == 200:
+                        addr = nom_resp.json().get("address", {})
+                        loc_name = addr.get("city") or addr.get("town") or addr.get("county") or addr.get("state")
+                        if loc_name:
+                            disaster_location = f" (Near {loc_name})"
+                except:
+                    pass
+                    
+                disasters.append({"title": f"{title}{disaster_location}", "description": desc})
+                
         return jsonify({"disasters": disasters}), 200
     except Exception as e:
         print(f"Error fetching GDACS: {e}")
@@ -274,7 +315,7 @@ def autocomplete():
         return jsonify({"suggestions": []}), 200
     url = "https://places.googleapis.com/v1/places:autocomplete"
     headers = {"Content-Type": "application/json", "X-Goog-Api-Key": google_places_key}
-    body = {"input": text, "includedRegionCodes": ["PH"]}
+    body = {"input": text}
     if lat and lon:
         body["locationBias"] = {"circle": {"center": {"latitude": lat, "longitude": lon}, "radius": 50000.0}}
     try:
@@ -296,7 +337,7 @@ def autocomplete():
 @app.route("/api/hero-image", methods=["POST"])
 def hero_image():
     data = request.get_json()
-    query = data.get("query", "philippines tropical landscape")
+    query = data.get("query", "beautiful landscape travel")
     unsplash_key = os.getenv("UNSPLASH_ACCESS_KEY")
     google_key = os.getenv("GOOGLE_PLACES_API_KEY")
 
@@ -343,48 +384,29 @@ def hero_image():
                 data = resp.json()
                 urls = []
                 for place in data.get("places", []):
-                    # Filter: Only accept HD landscape photos (width > height AND min 1280px)
                     good_photos = [
                         p for p in place.get("photos", [])
                         if p.get("widthPx", 0) >= 1280 and p.get("widthPx", 0) > p.get("heightPx", 0)
                     ]
-                    # Take up to 2 HD photos per place
                     for photo in good_photos[:2]:
                         urls.append(f"https://places.googleapis.com/v1/{photo['name']}/media?maxHeightPx=1080&maxWidthPx=1920&key={google_key}")
                 return urls[:5]
         except Exception as e:
             print(f"Google Places photo error: {e}")
         return []
-    # Extract the city name from "City Philippines"
-    city = query.replace(" Philippines", "").strip()
     
-    # List of Philippine places guaranteed to have stunning Unsplash photos
-    photogenic_places = [
-        "manila", "cebu", "palawan", "bohol", "siargao", "boracay", 
-        "baguio", "batanes", "la union", "davao", "vigan", "coron", 
-        "el nido", "tagaytay", "makati", "bgc", "batangas", "zambales"
-    ]
-    
-    is_photogenic = any(p in city.lower() for p in photogenic_places)
-    
-    print(f"[HeroImage] Request for '{city}' (Photogenic: {is_photogenic})")
+    city = query.strip()
+    img_urls = fetch_image_unsplash(f"{city} landscape")
 
-    img_urls = []
-    if is_photogenic:
-        # Try specific city query first
-        img_urls = fetch_image_unsplash(f"{city} Philippines landscape")
-        if not img_urls:
-            img_urls = fetch_image_unsplash(f"{city} Philippines")
-    
-    # If not a famous tourist city (like Caloocan), OR if specific query failed,
-    # fallback to stunning generic Philippine landscapes so the app ALWAYS looks premium.
+    if not img_urls:
+        img_urls = fetch_image_unsplash(f"{city}")
+
     if not img_urls:
         import random
         generic_queries = [
-            "Philippines tropical beach travel", 
-            "Philippines beautiful nature", 
-            "Philippines mountains landscape", 
-            "Philippines island aerial"
+            "beautiful nature landscape", 
+            "mountains landscape", 
+            "world famous city aerial"
         ]
         img_urls = fetch_image_unsplash(random.choice(generic_queries))
 
@@ -398,7 +420,7 @@ def get_discover_photos():
         return jsonify({"error": "No Unsplash key"}), 500
         
     location = request.args.get("location", "")
-    query_str = f"{location} philippines tourist spot" if location else "philippines tourist spot"
+    query_str = f"{location} tourist spot" if location else "tourist spot"
         
     url = "https://api.unsplash.com/photos/random"
     headers = {"Authorization": f"Client-ID {unsplash_key}"}
@@ -442,23 +464,24 @@ def reverse_geocode():
         if resp.status_code == 200:
             data = resp.json()
             address = data.get("address", {})
-            # Priority: state (province) > county > city > town
+            # Priority: state (province) > county > city > town > country
             province = (
                 address.get("state") or
                 address.get("county") or
                 address.get("city") or
                 address.get("town") or
                 address.get("village") or
-                "Philippines"
+                address.get("country") or
+                "Unknown Location"
             )
             # Clean up "Province of X" format
             if province.lower().startswith("province of "):
                 province = province[12:]
             return jsonify({"province": province}), 200
-        return jsonify({"province": "Philippines"}), 200
+        return jsonify({"province": "Unknown Location"}), 200
     except Exception as e:
         print(f"[ReverseGeocode] Error: {e}")
-        return jsonify({"province": "Philippines"}), 200
+        return jsonify({"province": "Unknown Location"}), 200
 
 @app.route("/api/place-details", methods=["POST"])
 def place_details():
@@ -680,20 +703,22 @@ def fetch_google_places(lat, lon, radius, category="Any", keyword=None):
                     "userRatingCount": user_rating_count,
                     "photoUrl": photo_url,
                     "reviews": reviews,
-                    "google_place_id": place.get("id")
+                    "google_place_id": place.get("id"),
+                    "travelMins": 0,
+                    "score": 0,
+                    "matchReasons": []
                 })
         except Exception as e:
             print(f"[Google] Error: {e}")
     # Deduplicate
-    seen = {}
+    # Deduplicate strictly by name or place ID
+    seen = set()
     unique = []
     for p in all_places:
-        key = p["name"].lower()
+        key = p["name"].lower().strip()
         if key in seen:
-            prev_lat, prev_lon = seen[key]
-            if haversine(p["lat"], p["lon"], prev_lat, prev_lon) < 0.3:
-                continue
-        seen[key] = (p["lat"], p["lon"])
+            continue
+        seen.add(key)
         unique.append(p)
     return unique
 

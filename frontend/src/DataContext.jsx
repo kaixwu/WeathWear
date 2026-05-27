@@ -109,7 +109,7 @@ export const DataProvider = ({ children }) => {
       setForecast(dailyData.slice(0, 5));
       setFullForecast(fRes.data.list);
 
-      axios.get(`/api/disasters`)
+      axios.get(`/api/disasters?lat=${lat}&lon=${lon}`)
         .then(res => setDisasters(res.data.disasters || []))
         .catch(err => console.error("GDACS error", err));
 
