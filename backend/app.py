@@ -70,6 +70,30 @@ gemini_client = google_genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 tomtom_key = os.getenv("TOMTOM_API_KEY")
 google_places_key = os.getenv("GOOGLE_PLACES_API_KEY")
 
+def generate_gemini_content(contents):
+    """
+    Unified helper to make Gemini API calls with robust model failover.
+    Tries 'gemini-3.1-flash-lite' (500 RPD) first,
+    fails over to 'gemini-2.5-flash' (20 RPD) second,
+    and 'gemini-2.5-flash-lite' as a third backup!
+    """
+    models = ["gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
+    last_err = None
+    
+    for model in models:
+        try:
+            resp = gemini_client.models.generate_content(
+                model=model,
+                contents=contents
+            )
+            print(f"[Gemini API Helper] Success using model: '{model}'")
+            return resp
+        except Exception as e:
+            print(f"[Gemini API Helper] Warning: model '{model}' failed or rate-limited: {e}")
+            last_err = e
+            
+    raise last_err
+
 # ── MODELS (unchanged) ──────────────────────────────────────────────────────
 class User(db.Model):
     __tablename__ = 'users'
@@ -598,7 +622,7 @@ def fetch_google_places_text_search(lat, lon, radius, keyword):
                 "score": 0,
                 "matchReasons": []
             })
-        print(f"[TextSearch] '{keyword}' near ({lat},{lon}) → {len(results)} results")
+        print(f"[TextSearch] '{keyword}' near ({lat},{lon}) -> {len(results)} results")
         return results
     except Exception as e:
         print(f"[TextSearch] Exception: {e}")
@@ -633,7 +657,9 @@ def fetch_google_places(lat, lon, radius, category="Any", keyword=None):
         "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location,places.primaryType,places.types,places.regularOpeningHours,places.currentOpeningHours,places.rating,places.userRatingCount,places.photos,places.reviews"
     }
     all_places = []
-    for ptype in place_types:
+    from concurrent.futures import ThreadPoolExecutor
+
+    def fetch_type(ptype):
         body = {
             "includedTypes": [ptype],
             "maxResultCount": 20,
@@ -643,73 +669,78 @@ def fetch_google_places(lat, lon, radius, category="Any", keyword=None):
         }
         try:
             resp = requests.post(url, headers=headers, json=body, timeout=10)
-            if resp.status_code != 200:
-                continue
-            data = resp.json()
-            for place in data.get("places", []):
-                name = place.get("displayName", {}).get("text", "")
-                if not name: continue
-                loc = place.get("location", {})
-                d_lat = loc.get("latitude")
-                d_lon = loc.get("longitude")
-                if not d_lat or not d_lon: continue
-                dist = round(haversine(lat, lon, d_lat, d_lon), 1)
-                if dist > radius / 1000: continue
-                primary_type = place.get("primaryType", "")
-                category_mapped = "Attraction"
-                dest_type = "Outdoor"
-                if "restaurant" in primary_type or "cafe" in primary_type:
-                    category_mapped = "Cafe" if "cafe" in primary_type else "Restaurant"
-                    dest_type = "Indoor"
-                elif "museum" in primary_type:
-                    category_mapped = "Museum"; dest_type = "Indoor"
-                elif "shopping_mall" in primary_type:
-                    category_mapped = "Shopping"; dest_type = "Indoor"
-                elif "park" in primary_type:
-                    category_mapped = "Park"; dest_type = "Outdoor"
-                hours = place.get("currentOpeningHours") or place.get("regularOpeningHours", {})
-                is_open = hours.get("openNow", None)
-                hours_display = "; ".join(hours.get("weekdayDescriptions", [])[:3])
-                rating = place.get("rating")
-                user_rating_count = place.get("userRatingCount", 0)
-                
-                photos = place.get("photos", [])
-                photo_url = None
-                if photos:
-                    # Choose the photo with the largest area among the first 5 (lazy loading only one field, but width/height are available)
-                    best_photo = max(photos[:5], key=lambda p: (p.get("widthPx", 0) or 0) * (p.get("heightPx", 0) or 0), default=photos[0])
-                    photo_name = best_photo["name"]
-                    # Use a higher resolution (800x800) – you can go up to 1600 if needed
-                    photo_url = f"https://places.googleapis.com/v1/{photo_name}/media?maxHeightPx=800&maxWidthPx=800&key={google_places_key}"
-                
-                reviews = []
-                for r in place.get("reviews", [])[:5]:
-                    text = r.get("text", {}).get("text", "")
-                    author = r.get("authorAttribution", {}).get("displayName", "Anonymous")
-                    relative_time = r.get("relativePublishTimeDescription", "")
-                    if text: reviews.append({"text": text, "author": author, "time": relative_time})
-
-                all_places.append({
-                    "name": name,
-                    "lat": d_lat,
-                    "lon": d_lon,
-                    "type": dest_type,
-                    "category": category_mapped,
-                    "distance": dist,
-                    "isOpen": is_open,
-                    "hoursDisplay": hours_display,
-                    "address": place.get("formattedAddress", ""),
-                    "rating": rating,
-                    "userRatingCount": user_rating_count,
-                    "photoUrl": photo_url,
-                    "reviews": reviews,
-                    "google_place_id": place.get("id"),
-                    "travelMins": 0,
-                    "score": 0,
-                    "matchReasons": []
-                })
+            if resp.status_code == 200:
+                return resp.json().get("places", [])
         except Exception as e:
-            print(f"[Google] Error: {e}")
+            print(f"[Google] Error fetching {ptype}: {e}")
+        return []
+
+    # Run in parallel to drastically improve response times (up to 6x faster for 'Any' category)
+    with ThreadPoolExecutor(max_workers=len(place_types)) as executor:
+        results = executor.map(fetch_type, place_types)
+
+    for places_list in results:
+        for place in places_list:
+            name = place.get("displayName", {}).get("text", "")
+            if not name: continue
+            loc = place.get("location", {})
+            d_lat = loc.get("latitude")
+            d_lon = loc.get("longitude")
+            if not d_lat or not d_lon: continue
+            dist = round(haversine(lat, lon, d_lat, d_lon), 1)
+            if dist > radius / 1000: continue
+            primary_type = place.get("primaryType", "")
+            category_mapped = "Attraction"
+            dest_type = "Outdoor"
+            if "restaurant" in primary_type or "cafe" in primary_type:
+                category_mapped = "Cafe" if "cafe" in primary_type else "Restaurant"
+                dest_type = "Indoor"
+            elif "museum" in primary_type:
+                category_mapped = "Museum"; dest_type = "Indoor"
+            elif "shopping_mall" in primary_type:
+                category_mapped = "Shopping"; dest_type = "Indoor"
+            elif "park" in primary_type:
+                category_mapped = "Park"; dest_type = "Outdoor"
+            hours = place.get("currentOpeningHours") or place.get("regularOpeningHours", {})
+            is_open = hours.get("openNow", None)
+            hours_display = "; ".join(hours.get("weekdayDescriptions", [])[:3])
+            rating = place.get("rating")
+            user_rating_count = place.get("userRatingCount", 0)
+            
+            photos = place.get("photos", [])
+            photo_url = None
+            if photos:
+                # Choose the photo with the largest area among the first 5
+                best_photo = max(photos[:5], key=lambda p: (p.get("widthPx", 0) or 0) * (p.get("heightPx", 0) or 0), default=photos[0])
+                photo_name = best_photo["name"]
+                photo_url = f"https://places.googleapis.com/v1/{photo_name}/media?maxHeightPx=800&maxWidthPx=800&key={google_places_key}"
+            
+            reviews = []
+            for r in place.get("reviews", [])[:5]:
+                text = r.get("text", {}).get("text", "")
+                author = r.get("authorAttribution", {}).get("displayName", "Anonymous")
+                relative_time = r.get("relativePublishTimeDescription", "")
+                if text: reviews.append({"text": text, "author": author, "time": relative_time})
+
+            all_places.append({
+                "name": name,
+                "lat": d_lat,
+                "lon": d_lon,
+                "type": dest_type,
+                "category": category_mapped,
+                "distance": dist,
+                "isOpen": is_open,
+                "hoursDisplay": hours_display,
+                "address": place.get("formattedAddress", ""),
+                "rating": rating,
+                "userRatingCount": user_rating_count,
+                "photoUrl": photo_url,
+                "reviews": reviews,
+                "google_place_id": place.get("id"),
+                "travelMins": 0,
+                "score": 0,
+                "matchReasons": []
+            })
     # Deduplicate
     # Deduplicate strictly by name or place ID
     seen = set()
@@ -810,6 +841,40 @@ def calculate_local_scores(places, weather, preferred_category, env_type):
         p["matchReasons"] = reasons
     return places
 
+def generate_fallback_reason(place, category):
+    reasons = []
+    
+    # Rating-based
+    rating = place.get("rating")
+    if rating and rating >= 4.5:
+        reasons.append("boasts an exceptional rating with glowing visitor feedback")
+    elif rating and rating >= 4.0:
+        reasons.append("is highly recommended by locals for its top-tier quality")
+        
+    # Distance-based
+    dist = place.get("distance", 0)
+    if dist <= 2.0:
+        reasons.append("is situated just a short walk or drive away from your coordinates")
+    elif dist <= 5.0:
+        reasons.append("is located incredibly close by, minimizing your transit time")
+        
+    # Indoors/Outdoors setting
+    if place.get("type") == "Outdoor":
+        reasons.append("offers a beautiful outdoor breeze perfect for a refreshing visit")
+    else:
+        reasons.append("provides a fully air-conditioned, comfortable indoor space to unwind")
+        
+    if not reasons:
+        return f"A highly-rated local {category.lower() if category and category != 'Any' else 'spot'} that matches your search preferences perfectly."
+        
+    if len(reasons) >= 2:
+        sentence = f"{place['name']} {reasons[0]} and {reasons[1]}."
+    else:
+        sentence = f"{place['name']} {reasons[0]}."
+        
+    # Capitalize only the first letter
+    return sentence[0].upper() + sentence[1:] if len(sentence) > 1 else sentence
+
 # ── PLACES ENDPOINT (unchanged) ─────────────────────────────────────────────
 @app.route("/api/places", methods=["POST"])
 @jwt_required()
@@ -892,7 +957,7 @@ Return ONLY a valid JSON object with the following structure:
 Only use the exact place names from the list above. For the schedule, use the place name exactly as given.
 """
     try:
-        resp = gemini_client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
+        resp = generate_gemini_content(contents=prompt)
         text = resp.text.strip()
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0]
@@ -1018,7 +1083,7 @@ Choose 2-3 places that best match the user's request. Return ONLY a valid JSON o
 Only use exact place names from the list above.
 """
     try:
-        resp = gemini_client.models.generate_content(model="gemini-2.5-flash-lite", contents=final_prompt)
+        resp = generate_gemini_content(contents=final_prompt)
         text = resp.text.strip()
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0]
@@ -1090,7 +1155,7 @@ def place_summary():
     for idx, r in enumerate(reviews):
         prompt += f"- {r}\n"
     try:
-        resp = gemini_client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
+        resp = generate_gemini_content(contents=prompt)
         text = resp.text.strip()
         return jsonify({"summary": text}), 200
     except Exception as e:
@@ -1127,7 +1192,7 @@ IMPORTANT: You must start your response EXACTLY with either [APPROVED] if the pl
 Then provide your explanation in under 3 sentences.
 """
     try:
-        resp = gemini_client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
+        resp = generate_gemini_content(contents=prompt)
         text = resp.text.strip()
         return jsonify({"validation": text}), 200
     except Exception as e:
@@ -1220,6 +1285,291 @@ def delete_itinerary(itinerary_id):
     db.session.delete(itin)
     db.session.commit()
     return jsonify({"message": "Itinerary deleted"}), 200
+
+@app.route("/api/suggest-places", methods=["POST"])
+def suggest_places():
+    data = request.get_json()
+    lat = data.get("lat")
+    lon = data.get("lon")
+    category = data.get("category", "")
+    radius = data.get("radius", 10000)
+    weather = data.get("weather", {})
+    env_type = "Any"
+    
+    if not lat or not lon or not category:
+        return jsonify({"error": "Missing location or category"}), 400
+        
+    try:
+        # Use exact same robust search as destinations page
+        places = fetch_google_places(lat, lon, radius, category)
+        if not places:
+            return jsonify([]), 200
+            
+        get_tomtom_travel_times(lat, lon, places)
+        scored = calculate_local_scores(places, weather, category, env_type)
+        
+        # Filter and sort (strictly exclude currently closed places, and only keep scored > 0)
+        scored = [p for p in scored if p.get("isOpen") is not False and p.get("score", 0) > 0]
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        
+        results = scored[:3]
+        
+        # Populate our beautiful, responsive rule-based reasons (highly accurate, zero token cost!)
+        for r in results:
+            r["whySuggested"] = generate_fallback_reason(r, category)
+            
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/ai-chat", methods=["POST"])
+def ai_chat():
+    data = request.get_json()
+    user_message = data.get("message")
+    history = data.get("history", [])
+    location = data.get("location", "Philippines")
+    weather = data.get("weather", {})
+    lat = data.get("lat")
+    lon = data.get("lon")
+    
+    if not user_message:
+        return jsonify({"error": "Message is required"}), 400
+        
+    system_instruction = f"""
+You are SunWise AI, a premium, intelligent, highly-capable travel companion and smart concierge.
+The user is currently at location: {location}.
+Current local weather conditions: {json.dumps(weather) if weather else "Unknown"}.
+
+Response Formatting & Readability Rules:
+1. **Be extremely concise and direct**: Avoid long conversational fillers, intros, or wordy pleasantries. Keep intros and outros under 1-2 short sentences.
+2. **Compact Listings (Max 3 spots)**: If recommending places, limit to the **Top 3 spots**.
+3. **Structured formatting (Single-level bullets only)**: Format each recommended spot exactly like this (bold spot names, clean emojis, no nested sub-bullets):
+   * **1. Spot Name**
+   * ⭐ [Rating]/5 ([Review Count] reviews) | [status_emoji] (Open Now or Closed)
+   * 📍 Address: [Address]
+   * 🕒 Hours: [Hours]
+   * 💬 Insight: [1-sentence insight why they should visit]
+4. **Short Dynamic Advice**: Keep weather guides, safety tips, or travel insights under **2 short bullet points** total. Always prefix this section with the exact title "**Travel Tips**" on a new line!
+5. **Contextual Suggested Quick Replies**: At the very end of your response (after all content), you MUST generate exactly 3 highly relevant suggested follow-up queries that the user might want to click next.
+   - **CRITICAL RESTRICTION**: NEVER suggest queries about opening Google Maps, redirecting to navigation, opening external links, showing/viewing photos, viewing images, or starting driving routes (since you cannot do these in a text chatbot).
+   - ONLY suggest text-based actions: e.g. finding alternative spots, detailing menu highlights in text, planning travel itineraries, weather packing checklists, or safety warnings.
+   - You MUST format it exactly like this at the very end:
+[SUGGESTIONS]
+* Emoji Suggestion Option 1
+* Emoji Suggestion Option 2
+* Emoji Suggestion Option 3
+"""
+
+    query_str = None
+    realtime_places = []
+    
+    # 1. High-Performance Local Travel Intent Classifier (zero token cost, saving 50% API calls!)
+    msg_lower = user_message.lower()
+    recommend_triggers = [
+        "recommend", "suggest", "find", "search", "show me", "top 5", "top 10", "best", "where to eat", "good spots",
+        "cafe", "restaurant", "samgyupsal", "food", "places", "spots", "eat", "visit", "tourist", "bar", "park", "hotel", "outing"
+    ]
+    
+    is_recommend_query = False
+    for trigger in recommend_triggers:
+        pattern = r'\b' + re.escape(trigger) + r'\b'
+        if re.search(pattern, msg_lower):
+            is_recommend_query = True
+            break
+            
+    if is_recommend_query:
+        # Extract location indicator "in [place]", "near [place]", "at [place]", "around [place]"
+        loc_match = re.search(r'(?:in|near|at|around)\s+([a-zA-Z\s,]+)', user_message, re.IGNORECASE)
+        search_loc = None
+        if loc_match:
+            search_loc = loc_match.group(1).strip()
+            # Clean up trailing punctuation
+            search_loc = re.sub(r'[^\w\s]', '', search_loc).strip()
+        else:
+            search_loc = "current location"
+            
+        # Clean up keyword search term by stripping stops
+        keyword = user_message
+        stops = [
+            "recommend", "suggest", "find", "search", "show me", "show", "me", "top 5", "top 10", "best", 
+            "where to eat", "good spots", "some", "a", "the"
+        ]
+        # First remove action stops
+        for stop in stops:
+            keyword = re.sub(r'\b' + re.escape(stop) + r'\b', '', keyword, flags=re.IGNORECASE)
+            
+        # Then remove location suffix if present
+        if search_loc and search_loc.lower() != "current location":
+            keyword = re.sub(r'\b(?:in|near|at|around)\s+' + re.escape(search_loc) + r'\b', '', keyword, flags=re.IGNORECASE)
+            
+        keyword = keyword.strip()
+        keyword = re.sub(r'[^\w\s]', '', keyword).strip() # clean symbols
+        
+        if keyword:
+            query_str = keyword
+            if search_loc and search_loc.lower() != "current location":
+                query_str = f"{keyword} in {search_loc}"
+            
+            # Fetch real-time places from Google Places API
+            search_lat = lat or 14.5995
+            search_lon = lon or 120.9842
+            try:
+                realtime_places = fetch_google_places_text_search(search_lat, search_lon, 20000, query_str)
+                print(f"[AIChat Local Classifier] Query: '{query_str}' -> Found {len(realtime_places)} places")
+            except Exception as fe:
+                print(f"[AIChat Local Classifier] Fetch error: {fe}")
+            
+    # 3. Add Google Places to prompt context if available
+    if realtime_places:
+        places_summary = []
+        for p in realtime_places[:5]: # Top 5
+            places_summary.append({
+                "name": p["name"],
+                "address": p.get("address"),
+                "rating": p.get("rating"),
+                "ratingCount": p.get("ratingCount"),
+                "isOpen": p.get("isOpen"),
+                "hours": p.get("hoursDisplay")
+            })
+        
+        system_instruction += f"\n\nReal-time Places Data found via Google Places API for query '{query_str}':\n{json.dumps(places_summary, indent=2)}\n\nIMPORTANT: You MUST base your recommendations strictly on these real-time Google Places API results! Follow these formatting rules strictly to keep the response compact and beautiful:\n1. Recommend ONLY the top 3 spots.\n2. Format each spot exactly like this (single-level bullets, no nested sub-bullets):\n* **1. Spot Name**\n* ⭐ [Rating]/5 ([Review Count] reviews) | [status_emoji] (Open Now or Closed)\n* 📍 [Address]\n* 🕒 [Hours]\n* 💬 [1-sentence insight why they should visit]\n3. Do not include nested bullets or long paragraphs."
+    
+    # 4. Generate final chat response
+    try:
+        prompt_parts = [system_instruction, "\nConversation History:\n"]
+        for msg in history:
+            role_label = "User" if msg.get("role") == "user" else "SunWise AI"
+            prompt_parts.append(f"{role_label}: {msg.get('text')}")
+            
+        prompt_parts.append(f"User: {user_message}")
+        prompt_parts.append("SunWise AI:")
+        
+        full_prompt = "\n".join(prompt_parts)
+        
+        if os.getenv("GEMINI_API_KEY"):
+            try:
+                response = generate_gemini_content(contents=full_prompt)
+                response_text = response.text
+            except Exception as gem_err:
+                print(f"[AIChat] Gemini Generation Error (using fallback): {gem_err}")
+                if "RESOURCE_EXHAUSTED" in str(gem_err) or "quota" in str(gem_err).lower() or "limit" in str(gem_err).lower():
+                    if realtime_places:
+                        response_text = f"I am currently experiencing high demand on my AI servers, but I successfully retrieved verified local listings near you via the **Google Places API**! 🌟\n\nHere are the top matches for **{query_str or user_message}**:\n\n"
+                        for idx, p in enumerate(realtime_places[:5], 1):
+                            status_emoji = "🟢 Open Now" if p.get("isOpen") else "🔴 Closed"
+                            rating_str = f"⭐ {p.get('rating')} ({p.get('ratingCount')} reviews)" if p.get("rating") else "No reviews yet"
+                            response_text += f"{idx}. **{p['name']}**\n"
+                            response_text += f"   - {rating_str} | {status_emoji}\n"
+                            if p.get("address"):
+                                response_text += f"   - 📍 Address: {p['address']}\n"
+                            if p.get("hoursDisplay"):
+                                response_text += f"   - 🕒 Hours: {p['hoursDisplay']}\n"
+                            response_text += "\n"
+                        response_text += "Feel free to check them out! Apologies for the temporary AI response delay. Let me know if you need anything else!"
+                    else:
+                        response_text = "I'm sorry, I am currently experiencing extremely high traffic on my AI thinking engines. Please try asking me again in a few moments! ☕"
+                else:
+                    raise gem_err
+        else:
+            response_text = "I'm sorry, my AI backend is offline. Please configure a valid GEMINI_API_KEY."
+            
+        # Update history
+        updated_history = list(history)
+        updated_history.append({"role": "user", "text": user_message})
+        updated_history.append({"role": "model", "text": response_text})
+
+        # 1. Parse dynamic AI suggested replies if present in the response
+        ai_suggestions = []
+        if "[SUGGESTIONS]" in response_text:
+            parts = response_text.split("[SUGGESTIONS]")
+            response_text = parts[0].strip()
+            sug_block = parts[1].strip()
+            for line in sug_block.split("\n"):
+                cleaned = line.replace("*", "").replace("-", "").strip()
+                if cleaned:
+                    ai_suggestions.append(cleaned)
+
+        # Determine separate bubbles by split markers
+        bubbles = []
+        lower_text = response_text.lower()
+        split_marker = None
+        for marker in ["**travel tips**", "### travel tips", "**weather tips**", "travel tips"]:
+            if marker in lower_text:
+                idx = lower_text.find(marker)
+                split_marker = response_text[idx:idx+len(marker)]
+                break
+                
+        if split_marker:
+            parts = response_text.split(split_marker, 1)
+            bubble_1 = parts[0].strip()
+            bubble_2 = f"**Travel Tips**\n{parts[1].strip()}"
+            if bubble_1:
+                bubbles.append(bubble_1)
+            if bubble_2:
+                bubbles.append(bubble_2)
+        else:
+            bubbles.append(response_text)
+
+        # Generate local fallback/backup suggestions in case the AI didn't provide enough
+        backup_suggestions = []
+        msg_lower = user_message.lower()
+        
+        if realtime_places:
+            has_closed = any(p.get("isOpen") is False for p in realtime_places[:3])
+            if has_closed:
+                backup_suggestions.append("🔓 Show me places open now")
+            
+            if any(w in msg_lower for w in ["samgyupsal", "korean", "grill", "samgyup"]):
+                backup_suggestions.append("🥩 Other samgyupsal nearby")
+                backup_suggestions.append("🍜 Best Korean alternatives")
+            elif any(w in msg_lower for w in ["cafe", "coffee", "brew", "starbucks"]):
+                backup_suggestions.append("☕ Cozy quiet cafes")
+                backup_suggestions.append("🍰 Cafes with desserts")
+            elif any(w in msg_lower for w in ["restaurant", "food", "eat", "dinner", "lunch"]):
+                backup_suggestions.append("🍔 Fast food spots")
+                backup_suggestions.append("🍕 Top-rated diners")
+            else:
+                backup_suggestions.append("✨ Show other top spots")
+                
+            rain_prob = weather.get("rain_prob", 0) if isinstance(weather, dict) else 0
+            temp = weather.get("temp", 30) if isinstance(weather, dict) else 30
+            if isinstance(rain_prob, (int, float)) and rain_prob > 50:
+                backup_suggestions.append("🏛️ Cozy indoor spots")
+            elif isinstance(temp, (int, float)) and temp > 34:
+                backup_suggestions.append("❄️ Air-conditioned places")
+        elif "weather" in msg_lower:
+            backup_suggestions.append("👕 What should I wear today?")
+            backup_suggestions.append("🎒 Best outdoor activities")
+            backup_suggestions.append("☕ Nearby cafes to chill")
+        else:
+            backup_suggestions.append("🗺️ Plan a 1-day itinerary")
+            backup_suggestions.append("☕ Best cafes nearby")
+            backup_suggestions.append("🏛️ Top tourist spots")
+            
+        # Merge AI suggestions and local backup suggestions
+        suggestions = []
+        for s in ai_suggestions:
+            if s not in suggestions:
+                suggestions.append(s)
+        for s in backup_suggestions:
+            if len(suggestions) >= 3:
+                break
+            if s not in suggestions:
+                suggestions.append(s)
+                
+        suggestions = suggestions[:3]
+        if not suggestions:
+            suggestions = ["🗺️ Plan a 1-day itinerary", "☕ Best cafes nearby", "🏛️ Top tourist spots"]
+        
+        return jsonify({
+            "text": response_text,
+            "bubbles": bubbles,
+            "suggestions": suggestions,
+            "history": updated_history
+        }), 200
+    except Exception as e:
+        print(f"[AIChat] Generation Error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

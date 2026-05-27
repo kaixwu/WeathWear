@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useData } from "../DataContext";
 import { CloudLightning, CloudRain, Cloud, Sun, Snowflake, CloudFog, CloudDrizzle, Droplets, Wind, Sunrise, Sunset, AlertTriangle, CalendarDays, Clock } from "lucide-react";
+import WeatherEffects from "../components/WeatherEffects";
 
 
 const getWeatherIcon = (condition = "", size = 48) => {
@@ -15,14 +16,63 @@ const getWeatherIcon = (condition = "", size = 48) => {
 };
 
 export default function Weather() {
-  const { weather, city, forecast, fullForecast, disasters, locationError, loading, userCity } = useData();
+  const { weather: contextWeather, city: contextCity, forecast: contextForecast, fullForecast: contextFullForecast, disasters, locationError, loading, userCity } = useData();
   const [selectedDate, setSelectedDate] = useState(null);
+  
+  // Local state for searched weather
+  const [searchCity, setSearchCity] = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [localWeather, setLocalWeather] = useState(null);
+  const [localForecast, setLocalForecast] = useState(null);
+  const [localFullForecast, setLocalFullForecast] = useState(null);
+  const [searchError, setSearchError] = useState("");
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!searchCity.trim()) return;
+    setSearchLoading(true);
+    setSearchError("");
+    try {
+      const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
+      const wRes = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${searchCity}&appid=${API_KEY}&units=metric`);
+      if (!wRes.ok) throw new Error("City not found");
+      const wData = await wRes.json();
+      setLocalWeather(wData);
+
+      const fRes = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${searchCity}&appid=${API_KEY}&units=metric`);
+      const fData = await fRes.json();
+      
+      const uniqueDays = [];
+      const dailyData = [];
+      fData.list.forEach(item => {
+        const d = item.dt_txt.split(" ")[0];
+        if (!uniqueDays.includes(d)) {
+          uniqueDays.push(d);
+          dailyData.push(item);
+        }
+      });
+      
+      setLocalForecast(dailyData.slice(0, 5));
+      setLocalFullForecast(fData.list);
+      setSelectedDate(null);
+    } catch (err) {
+      console.error(err);
+      setSearchError("Could not find weather for that location.");
+    } finally {
+      setSearchLoading(false);
+    }
+  };
 
   if (loading) {
     return <div className="skeleton" style={{ height: "300px", maxWidth: "1200px", margin: "0 auto" }}></div>;
   }
 
-  if (locationError || !weather || forecast.length === 0) {
+  const displayWeather = localWeather || contextWeather;
+  const displayCity = localWeather ? localWeather.name : (userCity || contextCity);
+  const displayForecast = localForecast || contextForecast;
+  const displayFullForecast = localFullForecast || contextFullForecast;
+
+  if (locationError || !displayWeather || !displayForecast || displayForecast.length === 0) {
     return (
       <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px 24px", textAlign: "center" }}>
         <p style={{ color: "var(--text-muted)" }}>Please set your location on the Home page first.</p>
@@ -30,44 +80,61 @@ export default function Weather() {
     );
   }
 
-  const selectedDayForecast = selectedDate ? fullForecast.filter(f => f.dt_txt.startsWith(selectedDate)) : [];
+  const selectedDayForecast = selectedDate ? displayFullForecast.filter(f => f.dt_txt.startsWith(selectedDate)) : [];
 
   return (
-    <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px 24px" }}>
-      <h2 className="font-heading" style={{ marginBottom: "24px" }}>Weather Hub</h2>
+    <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px 24px", position: "relative" }}>
+      <WeatherEffects activeWeather={displayWeather} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "16px" }}>
+        <h2 className="font-heading" style={{ margin: 0 }}>Weather Hub</h2>
+        <form onSubmit={handleSearch} style={{ display: "flex", gap: "8px" }}>
+          <input 
+            type="text" 
+            placeholder="Check weather in..." 
+            value={searchCity} 
+            onChange={(e) => setSearchCity(e.target.value)} 
+            className="input-field" 
+            style={{ marginBottom: 0, padding: "8px 16px", borderRadius: "20px", minWidth: "250px" }} 
+          />
+          <button type="submit" disabled={searchLoading} className="btn-primary" style={{ padding: "8px 20px", borderRadius: "20px", width: "auto" }}>
+            {searchLoading ? "..." : "Search"}
+          </button>
+        </form>
+      </div>
+      
+      {searchError && <div style={{ color: "var(--danger)", marginBottom: "16px" }}>{searchError}</div>}
 
       <div className="glass-card" style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", padding: "32px", borderTop: "4px solid var(--accent-blue)" }}>
         <div>
-          {/* Use userCity if available, otherwise fallback to weather station city */}
           <div style={{ color: "var(--text-muted)", fontWeight: "600", fontSize: "1.1rem", marginBottom: "8px" }}>
-            {userCity || city}
+            {displayCity}
           </div>
           <div style={{ fontSize: "3.5rem", fontWeight: "300", fontFamily: "var(--font-heading)", display: "flex", alignItems: "center", gap: "16px" }}>
-            {getWeatherIcon(weather.weather[0].description, 56)}
-            {Math.round(weather.main.temp)}°C
+            {getWeatherIcon(displayWeather.weather[0].description, 56)}
+            {Math.round(displayWeather.main.temp)}°C
           </div>
-          <div style={{ color: "var(--accent-teal)", textTransform: "capitalize", fontWeight: "600", fontSize: "1.2rem", marginTop: "8px" }}>{weather.weather[0].description}</div>
+          <div style={{ color: "var(--accent-teal)", textTransform: "capitalize", fontWeight: "600", fontSize: "1.2rem", marginTop: "8px" }}>{displayWeather.weather[0].description}</div>
         </div>
         <div style={{ display: "flex", gap: "32px", textAlign: "center", flexWrap: "wrap", justifyContent: "center" }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
             <Droplets size={28} color="#38bdf8" />
             <div style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Humidity</div>
-            <div style={{ fontWeight: "600", fontSize: "1.1rem" }}>{weather.main.humidity}%</div>
+            <div style={{ fontWeight: "600", fontSize: "1.1rem" }}>{displayWeather.main.humidity}%</div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
             <Wind size={28} color="#94a3b8" />
             <div style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Wind</div>
-            <div style={{ fontWeight: "600", fontSize: "1.1rem" }}>{Math.round(weather.wind.speed * 3.6)} km/h</div>
+            <div style={{ fontWeight: "600", fontSize: "1.1rem" }}>{Math.round(displayWeather.wind.speed * 3.6)} km/h</div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
             <Sunrise size={28} color="#fbbf24" />
             <div style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Sunrise</div>
-            <div style={{ fontWeight: "600", fontSize: "1.1rem" }}>{new Date(weather.sys.sunrise * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+            <div style={{ fontWeight: "600", fontSize: "1.1rem" }}>{new Date(displayWeather.sys.sunrise * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
             <Sunset size={28} color="#f87171" />
             <div style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Sunset</div>
-            <div style={{ fontWeight: "600", fontSize: "1.1rem" }}>{new Date(weather.sys.sunset * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+            <div style={{ fontWeight: "600", fontSize: "1.1rem" }}>{new Date(displayWeather.sys.sunset * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
           </div>
         </div>
       </div>
@@ -92,7 +159,7 @@ export default function Weather() {
         <h3 className="font-heading" style={{ margin: 0, color: "var(--text-muted)", fontSize: "1.1rem" }}>5-Day Forecast</h3>
       </div>
       <div style={{ display: "flex", gap: "16px", overflowX: "auto", paddingBottom: "16px", marginBottom: selectedDate ? "16px" : "32px" }}>
-        {forecast.map((f, i) => {
+        {displayForecast.map((f, i) => {
           const dateKey = f.dt_txt.split(" ")[0];
           const isSelected = selectedDate === dateKey;
           return (

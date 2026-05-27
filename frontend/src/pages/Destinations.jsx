@@ -6,6 +6,7 @@ import {
   MapPin, Clock, Star, Car, Compass, MessageSquare,
   Zap, CalendarCheck, X, ChevronDown, CheckCircle, Map
 } from "lucide-react";
+import PlaceModal from "../components/PlaceModal";
 
 const getLocalDateString = () => {
   const now = new Date();
@@ -23,7 +24,6 @@ export default function Destinations() {
     weather, refreshItineraries
   } = useData();
 
-  const [openFilter, setOpenFilter] = useState("Any");
   const [showMore, setShowMore] = useState(false);
 
   // Detail modal
@@ -126,9 +126,8 @@ export default function Destinations() {
 
   // ── Filter logic ─────────────────────────────────────
   const filteredPlaces = places.filter(p => {
-    if (openFilter === "Open" && p.isOpen !== true) return false;
-    if (openFilter === "Closed" && p.isOpen !== false) return false;
-    return true;
+    // Strictly hide currently closed establishments
+    return p.isOpen !== false;
   });
 
   const displayedPlaces = showMore ? filteredPlaces : filteredPlaces.slice(0, 9);
@@ -175,16 +174,7 @@ export default function Destinations() {
             </div>
           </div>
 
-          <div style={{ flex: '1 1 200px' }}>
-            <div className="section-label" style={{ marginBottom: '10px' }}>Status</div>
-            <div className="filter-scroll-container">
-              {["Any", "Open", "Closed"].map(o => (
-                <button key={o} className={`glass-pill ${openFilter === o ? "active" : ""}`} onClick={() => setOpenFilter(o)}>
-                  {o === "Open" ? "Open Now" : o === "Closed" ? "Closed" : o}
-                </button>
-              ))}
-            </div>
-          </div>
+
 
           <div style={{ flex: '1 1 280px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div className="section-label" style={{ marginBottom: '10px' }}>Search Radius</div>
@@ -259,193 +249,12 @@ export default function Destinations() {
 
       {/* ── Place Detail Modal ─────────────────────────── */}
       {detailOpen && detailPlace && (
-        <div className="modal-backdrop" onClick={closeDetail}>
-          <div className="modal-panel" onClick={e => e.stopPropagation()}>
-            {/* Hero image */}
-            <div className="modal-hero">
-              {detailPlace.photoUrl ? (
-                <img className="modal-hero-img" src={detailPlace.photoUrl} alt={detailPlace.name} />
-              ) : (
-                <div style={{
-                  width: '100%', height: '100%',
-                  background: 'linear-gradient(135deg, #0d2240, #071428)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                  <MapPin size={48} color="var(--text-muted)" />
-                </div>
-              )}
-              <div className="modal-hero-gradient" />
-              <div className="modal-hero-info">
-                {/* Badges */}
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                  {detailPlace.score > 0 && (
-                    <span className="dest-card-badge dest-card-badge-score">{detailPlace.score}% Match</span>
-                  )}
-                  {detailPlace.isOpen === true && <span className="dest-card-badge dest-card-badge-open">Open Now</span>}
-                  {detailPlace.isOpen === false && <span className="dest-card-badge dest-card-badge-closed">Closed</span>}
-                  <span style={{
-                    padding: '5px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 700,
-                    background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff'
-                  }}>{detailPlace.category}</span>
-                </div>
-                <h2 className="font-heading" style={{ fontSize: 'clamp(1.6rem, 4vw, 2.2rem)', margin: '0 0 8px', lineHeight: 1.1 }}>
-                  {detailPlace.name}
-                </h2>
-                <div style={{ display: 'flex', gap: '16px', fontSize: '0.82rem', color: 'rgba(255,255,255,0.6)', flexWrap: 'wrap' }}>
-                  {detailPlace.rating && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-gold)' }}>
-                      <Star size={13} fill="currentColor" /> {detailPlace.rating.toFixed(1)}
-                    </span>
-                  )}
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <MapPin size={13} /> {detailPlace.distance} km
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Car size={13} /> ~{detailPlace.travelMins} min
-                  </span>
-                </div>
-              </div>
-              <button className="modal-close-btn" onClick={closeDetail}>×</button>
-            </div>
-
-            {/* Scrollable body */}
-            <div className="modal-body">
-              {/* Actions */}
-              <div className="modal-action-row" style={{ marginBottom: '24px' }}>
-                <button
-                  className="modal-action-btn"
-                  style={{ background: 'var(--accent-blue)', color: '#07111f' }}
-                  onClick={() => openModal(detailPlace, 'today')}
-                >
-                  <Zap size={16} fill="currentColor" /> Go Today
-                </button>
-                <button
-                  className="modal-action-btn"
-                  style={{ background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.3)', color: 'var(--accent-blue)' }}
-                  onClick={() => openModal(detailPlace, 'schedule')}
-                >
-                  <CalendarCheck size={16} /> Schedule
-                </button>
-              </div>
-
-              {/* Why recommended */}
-              {detailPlace.matchReasons && detailPlace.matchReasons.length > 0 && (
-                <div className="modal-section">
-                  <div className="modal-section-title">Why recommended</div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {detailPlace.matchReasons.map((r, i) => (
-                      <span key={i} className="match-reason-tag">
-                        <CheckCircle size={10} /> {r}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Details */}
-              <div className="modal-section">
-                <div className="modal-section-title">Details</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {detailPlace.address && (
-                    <div style={{ display: 'flex', gap: '10px', fontSize: '0.88rem', color: 'var(--text-muted)', alignItems: 'flex-start' }}>
-                      <MapPin size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
-                      <span>{detailPlace.address}</span>
-                    </div>
-                  )}
-                  {detailPlace.hoursDisplay && (
-                    <div style={{ display: 'flex', gap: '10px', fontSize: '0.88rem', color: 'var(--text-muted)', alignItems: 'flex-start' }}>
-                      <Clock size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
-                      <span>{detailPlace.hoursDisplay}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Mall Directory */}
-              {detailPlace.category === 'Shopping' && (
-                <div className="modal-section">
-                  <div className="modal-section-title">Mall Directory</div>
-                  {directoryStores.length === 0 ? (
-                    <button
-                      onClick={() => fetchDirectory(detailPlace)}
-                      disabled={fetchingDirectory}
-                      style={{
-                        padding: '8px 20px', background: 'rgba(56,189,248,0.1)',
-                        border: '1px solid rgba(56,189,248,0.25)', borderRadius: '20px',
-                        color: 'var(--accent-blue)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700
-                      }}
-                    >
-                      {fetchingDirectory ? 'Loading…' : 'View Directory'}
-                    </button>
-                  ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                      {directoryStores.map((store, idx) => (
-                        <span key={idx} style={{
-                          padding: '5px 12px', borderRadius: '6px', fontSize: '0.78rem',
-                          background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', color: '#e2e8f0'
-                        }}>
-                          {store.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>({store.type})</span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* AI Review Summary */}
-              <div className="modal-section">
-                <div className="modal-section-title">
-                  <MessageSquare size={12} /> AI Review Summary
-                </div>
-                {aiSummary ? (
-                  <p style={{ fontSize: '0.9rem', color: 'var(--accent-teal)', fontStyle: 'italic', lineHeight: 1.65, margin: 0 }}>
-                    "{aiSummary}"
-                  </p>
-                ) : (
-                  <button
-                    onClick={() => generateReviewSummary(detailPlace)}
-                    disabled={aiSummaryLoading || !detailPlace.reviews || detailPlace.reviews.length === 0}
-                    style={{
-                      padding: '9px 20px', background: 'linear-gradient(135deg, rgba(56,189,248,0.15), rgba(45,212,191,0.15))',
-                      border: '1px solid rgba(56,189,248,0.25)', borderRadius: '20px',
-                      color: 'var(--accent-blue)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700,
-                      width: '100%',
-                    }}
-                  >
-                    {aiSummaryLoading ? 'Generating…'
-                      : detailPlace.reviews && detailPlace.reviews.length > 0
-                        ? '✨ Generate AI Summary'
-                        : 'No reviews available'}
-                  </button>
-                )}
-              </div>
-
-              {/* Reviews */}
-              {detailPlace.reviews && detailPlace.reviews.length > 0 && (
-                <div className="modal-section">
-                  <div className="modal-section-title">Recent Reviews</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '240px', overflowY: 'auto', paddingRight: '4px' }}>
-                    {detailPlace.reviews.map((rev, idx) => (
-                      <div key={idx} className="review-card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                          <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#e2e8f0' }}>
-                            {typeof rev === 'object' ? rev.author : 'Anonymous'}
-                          </span>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                            {typeof rev === 'object' ? rev.time : ''}
-                          </span>
-                        </div>
-                        <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-                          {typeof rev === 'object' ? rev.text : rev}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <PlaceModal
+          place={detailPlace}
+          onClose={closeDetail}
+          onGoToday={() => openModal(detailPlace, 'today')}
+          onSchedule={() => openModal(detailPlace, 'schedule')}
+        />
       )}
 
       {/* ── Scheduling Modal ───────────────────────────── */}

@@ -25,7 +25,14 @@ export const DataProvider = ({ children }) => {
   const [fullForecast, setFullForecast] = useState([]);
   const [disasters, setDisasters] = useState([]);
   const [places, setPlaces] = useState([]);
-  const [currentCoords, setCurrentCoords] = useState(null);
+  const [currentCoords, setCurrentCoords] = useState(() => {
+    const saved = localStorage.getItem("currentCoords");
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const [loading, setLoading] = useState(false);
   const [placesLoading, setPlacesLoading] = useState(false);
@@ -41,7 +48,26 @@ export const DataProvider = ({ children }) => {
   const [radius, setRadius] = useState(10000);
 
   // User‑overridden city name (from autocomplete / manual search)
-  const [userCity, setUserCity] = useState(null);
+  const [userCity, setUserCity] = useState(() => {
+    return localStorage.getItem("userCity") || null;
+  });
+
+  // Automatically sync coordinates and userCity to localStorage
+  useEffect(() => {
+    if (currentCoords) {
+      localStorage.setItem("currentCoords", JSON.stringify(currentCoords));
+    } else {
+      localStorage.removeItem("currentCoords");
+    }
+  }, [currentCoords]);
+
+  useEffect(() => {
+    if (userCity) {
+      localStorage.setItem("userCity", userCity);
+    } else {
+      localStorage.removeItem("userCity");
+    }
+  }, [userCity]);
 
   const isInitialFetchDone = useRef(false);
 
@@ -127,14 +153,48 @@ export const DataProvider = ({ children }) => {
     }
   };
 
+  const resetToGPS = () => {
+    setLoading(true);
+    setLocationError(false);
+    
+    // Clear manual overrides from state and storage
+    setUserCity(null);
+    localStorage.removeItem("userCity");
+    localStorage.removeItem("currentCoords");
+    
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        fetcheverything(coords.latitude, coords.longitude, radius);
+      },
+      () => {
+        setLoading(false);
+        setLocationError(true);
+        alert("Failed to access GPS. Please check browser permissions.");
+      },
+      { timeout: 10000, maximumAge: 60000, enableHighAccuracy: false }
+    );
+  };
+
   useEffect(() => {
     if (!token || role === "admin" || isInitialFetchDone.current) return;
 
     fetchItineraries();
 
+    // Rehydrate location from localStorage if available
+    const saved = localStorage.getItem("currentCoords");
+    if (saved) {
+      try {
+        const { lat, lon } = JSON.parse(saved);
+        fetcheverything(lat, lon, radius);
+        return;
+      } catch (err) {
+        console.error("Error parsing saved coordinates:", err);
+      }
+    }
+
+    // Default to auto-GPS discovery
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
-        // Clear any manually‑set city name when using automatic location
         setUserCity(null);
         fetcheverything(coords.latitude, coords.longitude, radius);
       },
@@ -161,6 +221,7 @@ export const DataProvider = ({ children }) => {
     allItineraries,
     refreshItineraries: fetchItineraries,
     userCity, setUserCity,    // ← new
+    resetToGPS,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

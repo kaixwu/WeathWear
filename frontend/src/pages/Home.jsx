@@ -7,7 +7,8 @@ import {
 } from 'react-leaflet';
 import {
   Search, MapPin, Navigation, AlertCircle,
-  Wind, Droplets, Sunrise, ChevronDown, Zap, Map as MapIcon
+  Wind, Droplets, Sunrise, ChevronDown, Zap, Map as MapIcon,
+  Sparkles, Compass
 } from "lucide-react";
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -15,6 +16,7 @@ import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import publicAxios from "../publicAxios";
+import PlaceModal from "../components/PlaceModal";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -22,6 +24,14 @@ L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
   shadowUrl: markerShadow,
 });
+
+const getLocalDateString = () => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 function MapFlyTo({ center }) {
   const map = useMap();
@@ -31,10 +41,11 @@ function MapFlyTo({ center }) {
 
 export default function Home() {
   const { token } = useAuth();
+  const [selectedPlace, setSelectedPlace] = useState(null);
   const {
     city, weather, currentCoords, loading, locationError, setLocationError,
     fetcheverything, places, todayPlan, radius,
-    userCity, setUserCity
+    userCity, setUserCity, refreshItineraries, resetToGPS
   } = useData();
 
   const [manualCity, setManualCity] = useState("");
@@ -46,6 +57,116 @@ export default function Home() {
   const [routeDest, setRouteDest] = useState(null);
   const [heroImgUrls, setHeroImgUrls] = useState([]);
   const [currentImgIndex, setCurrentImgIndex] = useState(0);
+
+  // AI Discovery States
+  const [activeTab, setActiveTab] = useState("suggest"); 
+  const [suggestCategory, setSuggestCategory] = useState("Cafe");
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [suggestResults, setSuggestResults] = useState(() => {
+    const saved = localStorage.getItem("suggestResults");
+    try {
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [itinLoading, setItinLoading] = useState(false);
+  const [itinResults, setItinResults] = useState(null);
+
+  // Scheduling States (identical to Destinations)
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalPlace, setModalPlace] = useState(null);
+  const [modalMode, setModalMode] = useState('today');
+  const [modalDate, setModalDate] = useState("");
+  const [modalTime, setModalTime] = useState("");
+
+  const openModal = (place, mode) => {
+    setModalPlace(place);
+    setModalMode(mode);
+    setModalDate(mode === 'today' ? getLocalDateString() : "");
+    setModalTime("");
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setModalPlace(null);
+  };
+
+  const handleConfirmSchedule = async () => {
+    if (!modalPlace) return;
+    const finalDate = modalMode === 'today' ? getLocalDateString() : modalDate;
+    if (!finalDate) { alert("Please select a date."); return; }
+    try {
+      await axios.post("/api/itineraries", {
+        date_str: finalDate,
+        time_str: modalTime,
+        places: [modalPlace]
+      });
+      refreshItineraries();
+      alert(`Plan confirmed for ${finalDate}!`);
+      closeModal();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save.");
+    }
+  };
+
+  const handleSuggestPlaces = async () => {
+    if (!currentCoords) return;
+    setSuggestLoading(true);
+    try {
+      const weatherData = weather ? {
+        temp: weather.main.temp,
+        rain_prob: weather.rain ? 100 : 0,
+        condition: weather.weather[0].description,
+        wind_speed: weather.wind.speed * 3.6
+      } : {};
+
+      const res = await axios.post("/api/suggest-places", {
+        lat: currentCoords.lat,
+        lon: currentCoords.lon,
+        category: suggestCategory,
+        radius: radius,
+        weather: weatherData
+      });
+      setSuggestResults(res.data);
+      localStorage.setItem("suggestResults", JSON.stringify(res.data));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSuggestLoading(false);
+    }
+  };
+
+  const handleGenerateItinerary = async () => {
+    if (!currentCoords || !city) return;
+    setItinLoading(true);
+    try {
+      const res = await axios.post(
+        "/api/generate-itinerary-text",
+        {
+          prompt: "Create a short 3-stop itinerary around my current location.",
+          lat: currentCoords.lat,
+          lon: currentCoords.lon,
+          search_location: city
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setItinResults(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setItinLoading(false);
+    }
+  };
+
+  // Clear old AI Discovery results whenever location coordinates change
+  useEffect(() => {
+    setSuggestResults([]);
+    localStorage.removeItem("suggestResults");
+    setItinResults(null);
+  }, [currentCoords]);
 
   // Show real name only if user manually searched, else "Current Location"
   const displayCity = userCity ? userCity.toUpperCase() : (city ? "CURRENT LOCATION" : '');
@@ -232,8 +353,8 @@ export default function Home() {
         /* No location: show search UI */
         <div className="hero-search-overlay" style={{ zIndex: 10 }}>
           <div className="hero-eyebrow">Location Required</div>
-          <h1 className="hero-city-name" style={{ fontSize: 'clamp(3rem, 8vw, 6rem)' }}>
-            Where are<br />you going?
+          <h1 className="hero-city-name" style={{ fontSize: 'clamp(2.2rem, 5vw, 4rem)', whiteSpace: 'nowrap', marginBottom: '14px' }}>
+            Where are you going?
           </h1>
           <p style={{ color: 'rgba(255,255,255,0.55)', marginBottom: '28px', fontSize: '0.95rem' }}>
             Enable location services or enter your city to get started.
@@ -275,6 +396,23 @@ export default function Home() {
               onClick={handleManualSearch}
             >
               <Search size={16} /> Search
+            </button>
+            <button
+              className="hero-btn"
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '13px 24px'
+              }}
+              onClick={() => {
+                resetToGPS();
+              }}
+            >
+              <Compass size={16} /> Use Current Location
             </button>
           </div>
         </div>
@@ -343,6 +481,96 @@ export default function Home() {
   return (
     <div>
       {renderHero()}
+
+      {/* ── AI Discovery Section ─────────────────────────────────────────────────── */}
+      {!loading && !locationError && currentCoords && (
+        <div style={{ padding: "40px 20px" }}>
+          <div style={{ textAlign: "center", marginBottom: "32px" }}>
+            <h2 className="font-heading" style={{ fontSize: "2.5rem", margin: "0 0 12px" }}>
+              <span className="text-gradient-blue">AI Discovery</span>
+            </h2>
+            <p style={{ color: "var(--text-muted)", maxWidth: "500px", margin: "0 auto" }}>
+              Let SunWise recommend the best places based on your location and preferences.
+            </p>
+          </div>
+
+            <div className="glass-card" style={{ padding: "32px" }}>
+              <div style={{ display: "flex", gap: "12px", marginBottom: "24px", overflowX: "auto", paddingBottom: "12px", scrollbarWidth: "thin" }}>
+                {["Any", "Cafe", "Restaurant", "Museum", "Park", "Shopping", "Nature", "Entertainment", "Heritage"].map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setSuggestCategory(cat)}
+                    className={`segmented-btn ${suggestCategory === cat ? "active" : ""}`}
+                    style={{ whiteSpace: "nowrap", padding: "10px 20px", borderRadius: "14px", fontSize: "0.9rem" }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "24px" }}>
+                <button 
+                  onClick={handleSuggestPlaces}
+                  disabled={suggestLoading}
+                  style={{ padding: "12px 24px", background: "linear-gradient(135deg, var(--accent-blue), var(--accent-teal))", border: "none", borderRadius: "12px", color: "#fff", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
+                >
+                  {suggestLoading ? <span className="spinner" style={{ width: "18px", height: "18px" }} /> : <Sparkles size={18} />} 
+                  Find Top 3
+                </button>
+              </div>
+
+              {suggestResults.length > 0 ? (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "24px" }}>
+                  {suggestResults.map((p, i) => (
+                    <div 
+                      key={i} 
+                      className="glass-card shimmer-glass suggest-card" 
+                      style={{ overflow: "hidden", padding: 0, cursor: "pointer", transition: "transform 0.2s", display: "flex", flexDirection: "column" }}
+                      onClick={() => setSelectedPlace(p)}
+                    >
+                      <div style={{ height: "180px", background: "#111", position: "relative" }}>
+                        {p.photoUrl ? (
+                          <img src={p.photoUrl} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        ) : (
+                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <MapPin size={32} color="rgba(255,255,255,0.2)" />
+                          </div>
+                        )}
+                        <div style={{ position: "absolute", bottom: "10px", right: "10px", background: "rgba(0,0,0,0.6)", padding: "4px 8px", borderRadius: "8px", fontSize: "0.75rem", fontWeight: "700", color: "#fff", backdropFilter: "blur(4px)" }}>
+                          Top {i + 1}
+                        </div>
+                      </div>
+                      <div style={{ padding: "20px", flex: 1, display: "flex", flexDirection: "column" }}>
+                        <div style={{ fontSize: "0.75rem", color: "var(--accent-teal)", fontWeight: "700", textTransform: "uppercase", marginBottom: "8px" }}>{p.category}</div>
+                        <h3 style={{ margin: "0 0 8px", fontSize: "1.2rem", fontWeight: "700", color: "#fff" }}>{p.name}</h3>
+                        <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.address}</p>
+                        {p.rating && (
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "12px", fontSize: "0.85rem", marginBottom: "16px" }}>
+                            <span style={{ color: "var(--accent-gold)" }}>★</span> {p.rating} ({p.ratingCount} reviews)
+                          </div>
+                        )}
+                        
+                        <div style={{ marginTop: "auto", background: "rgba(20,184,166,0.1)", border: "1px solid rgba(20,184,166,0.2)", borderRadius: "12px", padding: "12px", fontSize: "0.85rem", color: "#cbd5e1" }}>
+                          <strong style={{ color: "var(--accent-teal)", display: "block", marginBottom: "4px", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Why Suggested?</strong>
+                          {p.whySuggested || (p.matchReasons && p.matchReasons.length > 0 ? p.matchReasons[0] : `A highly-rated ${p.category || 'destination'} nearby that matches your preferences.`)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: "center", padding: "48px 20px", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: "16px", background: "rgba(0,0,0,0.2)" }}>
+                  <Compass size={48} color="var(--accent-blue)" style={{ opacity: 0.5, marginBottom: "16px" }} />
+                  <h3 style={{ margin: "0 0 8px", color: "#e2e8f0", fontSize: "1.2rem" }}>Ready to Explore?</h3>
+                  <p style={{ color: "var(--text-muted)", maxWidth: "400px", margin: "0 auto", fontSize: "0.95rem" }}>
+                    Select a category above and tap <strong>Find Top 3</strong>. Our AI will analyze your location and find the best hidden gems near you.
+                  </p>
+                </div>
+              )}
+            </div>
+
+
+        </div>
+      )}
 
       {!locationError && !loading && weather && currentCoords && (
         <div id="home-content" className="home-content-section">
@@ -518,6 +746,98 @@ export default function Home() {
                 <span className="spinner" /> Calculating Route…
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+
+      {selectedPlace && (
+        <PlaceModal 
+          place={selectedPlace} 
+          onClose={() => setSelectedPlace(null)} 
+          onGoToday={() => { openModal(selectedPlace, 'today'); }}
+          onSchedule={() => { openModal(selectedPlace, 'schedule'); }}
+        />
+      )}
+
+      {/* ── Scheduling Modal (identical to Destinations) ───────────────────────────── */}
+      {modalOpen && modalPlace && (
+        <div className="sched-modal-backdrop" onClick={closeModal} style={{ zIndex: 10000 }}>
+          <div className="sched-modal-panel" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+              <div>
+                <div className="section-label" style={{ marginBottom: '4px' }}>
+                  {modalMode === 'today' ? '⚡ Go Today' : '📅 Schedule'}
+                </div>
+                <h3 className="font-heading" style={{ margin: 0, fontSize: '1.4rem', letterSpacing: '0.04em' }}>
+                  {modalPlace.name}
+                </h3>
+              </div>
+              <button
+                onClick={closeModal}
+                style={{
+                  background: 'transparent', border: 'none', color: 'var(--text-muted)',
+                  cursor: 'pointer', padding: '4px', borderRadius: '6px'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {modalMode === 'schedule' && (
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                  Date
+                </label>
+                <input
+                  type="date"
+                  min={getLocalDateString()}
+                  value={modalDate}
+                  onChange={e => setModalDate(e.target.value)}
+                  className="input-field"
+                  style={{ width: '100%', marginBottom: 0 }}
+                />
+              </div>
+            )}
+
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                Time (optional)
+              </label>
+              <input
+                type="time"
+                value={modalTime}
+                onChange={e => setModalTime(e.target.value)}
+                className="input-field"
+                style={{ width: '100%', marginBottom: 0 }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={closeModal}
+                style={{
+                  flex: 1, padding: '11px', background: 'transparent',
+                  border: '1px solid var(--glass-border)', color: '#e2e8f0',
+                  borderRadius: '10px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmSchedule}
+                disabled={modalMode === 'schedule' && !modalDate}
+                style={{
+                  flex: 1, padding: '11px',
+                  background: 'linear-gradient(135deg, var(--accent-blue), var(--accent-teal))',
+                  border: 'none', color: '#07111f', borderRadius: '10px',
+                  cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: '1rem',
+                  letterSpacing: '0.05em', opacity: (modalMode === 'schedule' && !modalDate) ? 0.5 : 1
+                }}
+              >
+                Confirm
+              </button>
+            </div>
           </div>
         </div>
       )}

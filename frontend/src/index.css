@@ -458,7 +458,7 @@ h1, h2, h3, .font-heading {
 .hero-search-overlay {
   position: relative;
   z-index: 10;
-  padding: 0 clamp(24px, 6vw, 100px) clamp(80px, 12vh, 140px);
+  padding: 0 clamp(24px, 6vw, 100px) clamp(180px, 28vh, 280px); /* Lifted significantly higher to leave room for dropdown */
   max-width: 640px;
   animation: heroContentIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -1284,4 +1284,70 @@ h1, h2, h3, .font-heading {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
+}
+
+/* ── HORIZONTAL TIMELINE ─────────────────────── */
+.horizontal-timeline-container {
+  display: flex;
+  overflow-x: auto;
+  gap: 30px;
+  padding: 20px 0 40px;
+  position: relative;
+  align-items: flex-start;
+  scroll-behavior: smooth;
+}
+.horizontal-timeline-line {
+  position: absolute;
+  top: 105px; /* roughly middle of the card area */
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent-teal);
+  box-shadow: 0 0 10px var(--accent-teal);
+  z-index: 1;
+}
+.horizontal-timeline-stop {
+  position: relative;
+  min-width: 280px;
+  max-width: 280px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  z-index: 2;
+}
+.horizontal-timeline-dot {
+  position: absolute;
+  top: 80px; /* aligns with line */
+  left: -5px; /* dot on the left side of the card area */
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent-teal);
+  box-shadow: 0 0 15px var(--accent-teal);
+  z-index: 3;
+}
+.timeline-card {
+  height: 160px; /* fixed square-ish shape */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: rgba(15,23,42,0.85) !important;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 2px solid transparent;
+}
+.timeline-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--accent-teal);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.5), 0 0 15px rgba(20,184,166,0.3);
+}
+.timeline-reason {
+  background: rgba(20,184,166,0.1);
+  border: 1px solid rgba(20,184,166,0.2);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 0.9rem;
+  color: #cbd5e1;
+  line-height: 1.4;
 }
