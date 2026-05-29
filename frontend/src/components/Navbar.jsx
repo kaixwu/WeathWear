@@ -1,61 +1,203 @@
-import { Link, useLocation } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
-import { Home, CloudRain, Map, Calendar, ShieldCheck, LogOut, User, Compass } from "lucide-react";
-const API = "http://localhost:5000"
+import { LogOut, User } from "lucide-react";
+import gsap from "gsap";
+import SplitType from "split-type";
 
 export default function Navbar() {
   const { username, role, logout } = useAuth();
   const location = useLocation();
-
+  const navigate = useNavigate();
+  
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const isAnimating = useRef(false);
+  const tl = useRef(null);
+  const splitLinks = useRef(null);
+  
   const navItems = [
-    { name: "Home", path: "/home", icon: <Home size={18} /> },
-    { name: "Weather", path: "/weather", icon: <CloudRain size={18} /> },
-    { name: "Destinations", path: "/destinations", icon: <Map size={18} /> },
-    { name: "Planner", path: "/planner", icon: <Calendar size={18} /> },
+    { name: "Home", path: "/home" },
+    { name: "Weather", path: "/weather" },
+    { name: "Destinations", path: "/destinations" },
+    { name: "Planner", path: "/planner" },
   ];
 
   if (role === "admin") {
-    navItems.push({ name: "Admin Dashboard", path: "/admin", icon: <ShieldCheck size={18} /> });
+    navItems.push({ name: "Admin Dashboard", path: "/admin" });
   }
 
+  // Split-Type initialization and handling dynamic React changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+        if (splitLinks.current) {
+            splitLinks.current.revert();
+        }
+        splitLinks.current = new SplitType(".nav-items-container a", {
+            types: "lines",
+            lineClass: "line"
+        });
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [location.pathname, role]);
+  
+  // GSAP Timeline setup
+  useEffect(() => {
+    tl.current = gsap.timeline({
+        paused: true,
+        onComplete: () => {
+            isAnimating.current = false;
+        },
+        onReverseComplete: () => {
+            gsap.set(".nav-items-container a .line", { y: "100%" });
+            isAnimating.current = false;
+        }
+    });
+
+    const navBgs = document.querySelectorAll(".nav-bg");
+    
+    tl.current.to(navBgs, {
+        scaleY: 1,
+        duration: 0.75,
+        stagger: 0.1,
+        ease: "power3.inOut"
+    });
+
+    tl.current.to(".nav-items-container", {
+        clipPath: "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)",
+        duration: 0.75,
+        ease: "power3.inOut"
+    }, "-=0.6");
+    
+    return () => {
+        if (tl.current) tl.current.kill();
+        if (splitLinks.current) splitLinks.current.revert();
+    };
+  }, []);
+
+  const toggleMenu = () => {
+      if (isAnimating.current) return;
+      isAnimating.current = true;
+      
+      if (isMenuOpen) {
+          tl.current.reverse();
+      } else {
+          tl.current.play();
+          
+          const linkBlocks = [
+              ".nav-socials .line, .nav-legal .line",
+              ".nav-primary-links .line",
+              ".nav-secondary-links .line"
+          ];
+          
+          linkBlocks.forEach((selector) => {
+              gsap.fromTo(
+                  selector,
+                  { y: "100%" },
+                  {
+                      y: "0%",
+                      duration: 0.75,
+                      stagger: 0.05,
+                      ease: "power3.out",
+                      delay: 0.85
+                  }
+              );
+          });
+      }
+      setIsMenuOpen(!isMenuOpen);
+  };
+  
+  const handleLinkClick = (e, path) => {
+      e.preventDefault();
+      if (location.pathname === path) {
+          toggleMenu(); 
+      } else {
+          toggleMenu();
+          setTimeout(() => {
+              navigate(path);
+          }, 800); 
+      }
+  };
+
+  const handleLogout = (e) => {
+      e.preventDefault();
+      toggleMenu();
+      setTimeout(() => {
+          logout();
+      }, 800);
+  };
+
   return (
-    <nav style={{
-      display: "flex", justifyContent: "space-between", alignItems: "center",
-      padding: "16px 32px", background: "var(--glass-bg)",
-      backdropFilter: "blur(12px)", borderBottom: "1px solid var(--glass-border)",
-      marginBottom: location.pathname === "/home" ? "0" : "24px", position: "sticky", top: 0, zIndex: 1000
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
-        <Link to="/home" style={{ textDecoration: "none" }}>
-          <h1 className="font-heading" style={{ color: "var(--accent-blue)", fontSize: "1.5rem", margin: 0 }}>SunWise</h1>
-        </Link>
-        <div style={{ display: "flex", gap: "16px" }}>
-          {navItems.map(item => (
-            <Link key={item.name} to={item.path} style={{
-              textDecoration: "none",
-              color: location.pathname === item.path ? "var(--accent-blue)" : "var(--text-muted)",
-              fontWeight: location.pathname === item.path ? "700" : "500",
-              padding: "8px 12px",
-              borderRadius: "8px",
-              background: location.pathname === item.path ? "rgba(56, 189, 248, 0.1)" : "transparent",
-              transition: "all 0.2s",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px"
-            }}>
-              {item.icon} {item.name}
-            </Link>
-          ))}
+    <>
+      <nav 
+        className="nav-wrapper" 
+        style={{ 
+          position: location.pathname === "/home" ? "absolute" : "sticky", 
+          top: 0, 
+          zIndex: 1000,
+          marginBottom: location.pathname === "/home" ? "0" : "24px" 
+        }}
+      >
+        <div className="nav-logo">
+          <Link to="/home" style={{ textDecoration: "none" }} onClick={(e) => {
+              if (isMenuOpen) {
+                  e.preventDefault();
+                  toggleMenu();
+                  setTimeout(() => navigate("/home"), 800);
+              }
+          }}>
+            <h1 className="font-heading" style={{ color: isMenuOpen ? "#fff" : "var(--accent-blue)", fontSize: "1.8rem", margin: 0, transition: "color 0.4s ease" }}>SunWise</h1>
+          </Link>
         </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-        <span style={{ color: "var(--text-muted)", fontSize: "0.9rem", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
-          <User size={16} /> {username}
-        </span>
-        <button onClick={logout} className="btn-chip" style={{ border: "1px solid var(--danger)", color: "var(--danger)", padding: "8px 16px", display: "flex", alignItems: "center", gap: "6px" }}>
-          <LogOut size={16} /> Log Out
+        <button className={`nav-toggler ${isMenuOpen ? "open" : ""}`} onClick={toggleMenu}>
+          <span style={{ backgroundColor: isMenuOpen ? "#fff" : "var(--accent-blue)" }}></span>
+          <span style={{ backgroundColor: isMenuOpen ? "#fff" : "var(--accent-blue)" }}></span>
         </button>
+      </nav>
+
+      <div className="nav-content">
+          <div className="nav-bg"></div>
+          <div className="nav-bg"></div>
+          <div className="nav-bg"></div>
+          <div className="nav-bg"></div>
+          
+          <div className="nav-items-container">
+              <div className="nav-items-col">
+                  <div className="nav-socials">
+                      <a href="#" onClick={e=>e.preventDefault()}>Instagram</a>
+                      <a href="#" onClick={e=>e.preventDefault()}>X</a>
+                      <a href="#" onClick={e=>e.preventDefault()}>Facebook</a>
+                  </div>
+                  <div className="nav-legal">
+                      <a href="#" onClick={e=>e.preventDefault()}>Privacy Policy</a>
+                      <a href="#" onClick={e=>e.preventDefault()}>Terms of Service</a>
+                  </div>
+              </div>
+              
+              <div className="nav-items-col">
+                  <div className="nav-primary-links">
+                      {navItems.map(item => (
+                          <a 
+                              key={item.name} 
+                              href={item.path} 
+                              onClick={(e) => handleLinkClick(e, item.path)}
+                              style={{ color: location.pathname === item.path ? "var(--accent-teal)" : "#fff" }}
+                          >
+                              {item.name}
+                          </a>
+                      ))}
+                  </div>
+                  <div className="nav-secondary-links">
+                      <a href="#" onClick={e=>e.preventDefault()} style={{ display: "flex", alignItems: "center", gap: "8px", pointerEvents: "none" }}>
+                          <User size={20} /> {username}
+                      </a>
+                      <a href="#" onClick={handleLogout} style={{ color: "var(--danger)", display: "flex", alignItems: "center", gap: "8px" }}>
+                          <LogOut size={20} /> Log Out
+                      </a>
+                  </div>
+              </div>
+          </div>
       </div>
-    </nav>
+    </>
   );
 }
