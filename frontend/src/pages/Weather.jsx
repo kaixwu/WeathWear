@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useData } from "../DataContext";
 import { CloudLightning, CloudRain, Cloud, Sun, Snowflake, CloudFog, CloudDrizzle, Droplets, Wind, Sunrise, Sunset, AlertTriangle, CalendarDays, Clock } from "lucide-react";
-
+import FluidGradient from "../components/FluidGradient";
 
 
 const getWeatherIcon = (condition = "", size = 48) => {
@@ -84,7 +84,17 @@ export default function Weather() {
 
   return (
     <>
-
+      <div className="fluid-background-container" style={{ position: "fixed" }}>
+        <FluidGradient 
+          color1="#1e293b" 
+          color2="#0f172a" 
+          color3="#334155" 
+          color4="#0ea5e9"
+          opacity={0.7}
+          colorIntensity={0.5}
+        />
+        <div className="fluid-overlay" style={{ background: "rgba(4, 9, 20, 0.6)" }}></div>
+      </div>
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px 24px", position: "relative" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "16px" }}>
         <h2 className="font-heading" style={{ margin: 0 }}>Weather Hub</h2>

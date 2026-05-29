@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { MapPin, Compass } from "lucide-react";
 import { useData } from "../DataContext";
-
-
+import FluidGradient from "../components/FluidGradient";
 export default function Discover() {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +27,17 @@ export default function Discover() {
 
   return (
     <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 24px 60px" }}>
+      <div className="fluid-background-container" style={{ position: "fixed" }}>
+        <FluidGradient 
+          color1="#064e3b" 
+          color2="#0f766e" 
+          color3="#166534" 
+          color4="#84cc16"
+          opacity={0.6}
+          colorIntensity={0.5}
+        />
+        <div className="fluid-overlay" style={{ background: "rgba(4, 9, 20, 0.6)" }}></div>
+      </div>
 
       {/* Header */}
       <div style={{ padding: "20px 0 40px", textAlign: "center" }}>

@@ -7,7 +7,7 @@ import {
   Zap, CalendarCheck, X, ChevronDown, CheckCircle, Map
 } from "lucide-react";
 import PlaceModal from "../components/PlaceModal";
-
+import FluidGradient from "../components/FluidGradient";
 
 const getLocalDateString = () => {
   const now = new Date();
@@ -136,6 +136,17 @@ export default function Destinations() {
   // ── RENDER ───────────────────────────────────────────
   return (
     <div className="dest-page">
+      <div className="fluid-background-container" style={{ position: "fixed" }}>
+        <FluidGradient 
+          color1="#4c1d95" 
+          color2="#be123c" 
+          color3="#ea580c" 
+          color4="#f59e0b"
+          opacity={0.6}
+          colorIntensity={0.5}
+        />
+        <div className="fluid-overlay" style={{ background: "rgba(4, 9, 20, 0.6)" }}></div>
+      </div>
 
       {/* Page Header */}
       <div style={{ marginBottom: '32px', paddingTop: '8px' }}>

@@ -5,6 +5,7 @@ import { useData } from "../DataContext";
 import { CalendarCheck, Zap, Trash2, ListTodo, Sparkles, Send, MapPin, Clock, Car, Download, Star, MessageSquare, CheckCircle, X } from "lucide-react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
+import FluidGradient from "../components/FluidGradient";
 
 
 export default function Planner() {
@@ -195,6 +196,17 @@ export default function Planner() {
 
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px 40px" }}>
+      <div className="fluid-background-container" style={{ position: "fixed" }}>
+        <FluidGradient 
+          color1="#3b0764" 
+          color2="#86198f" 
+          color3="#be185d" 
+          color4="#c026d3"
+          opacity={0.6}
+          colorIntensity={0.5}
+        />
+        <div className="fluid-overlay" style={{ background: "rgba(4, 9, 20, 0.6)" }}></div>
+      </div>
 
       {/* ------ Header ------ */}
       <div style={{ marginBottom: "32px", display: "flex", alignItems: "center", gap: "12px" }}>
