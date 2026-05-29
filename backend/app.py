@@ -362,80 +362,128 @@ def autocomplete():
 def hero_image():
     data = request.get_json()
     query = data.get("query", "beautiful landscape travel")
-    unsplash_key = os.getenv("UNSPLASH_ACCESS_KEY")
+    lat = data.get("lat")
+    lon = data.get("lon")
     google_key = os.getenv("GOOGLE_PLACES_API_KEY")
+    unsplash_key = os.getenv("UNSPLASH_ACCESS_KEY")
 
-    def fetch_image_unsplash(search_query):
+    def fetch_places_hero_items():
+        if not google_key: return []
+        
+        headers = {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": google_key,
+            "X-Goog-FieldMask": "places.displayName,places.photos,places.types"
+        }
+        
+        if lat and lon:
+            url = "https://places.googleapis.com/v1/places:searchNearby"
+            body = {
+                "includedTypes": ["tourist_attraction", "park", "museum", "historical_landmark", "church", "restaurant", "shopping_mall"],
+                "maxResultCount": 20,
+                "locationRestriction": {
+                    "circle": {
+                        "center": {"latitude": float(lat), "longitude": float(lon)},
+                        "radius": 10000.0
+                    }
+                }
+            }
+        else:
+            url = "https://places.googleapis.com/v1/places:searchText"
+            body = {
+                "textQuery": f"best tourist attractions in {query}", 
+                "maxResultCount": 15
+            }
+            
+        try:
+            resp = requests.post(url, headers=headers, json=body, timeout=8)
+            if resp.status_code == 200:
+                data = resp.json()
+                hero_items = []
+                mall_count = 0
+                resto_count = 0
+                
+                for place in data.get("places", []):
+                    types = place.get("types", [])
+                    
+                    if "shopping_mall" in types:
+                        if mall_count >= 2: continue
+                        mall_count += 1
+                        
+                    if "restaurant" in types and "shopping_mall" not in types:
+                        if resto_count >= 2: continue
+                        resto_count += 1
+                        
+                    title = place.get("displayName", {}).get("text", "Beautiful Destination")
+                    photos = place.get("photos", [])
+                    
+                    # Filter for landscape HD photos
+                    good_photos = [
+                        p for p in photos
+                        if p.get("widthPx", 0) > p.get("heightPx", 0) and p.get("widthPx", 0) >= 1280
+                    ]
+                    
+                    if good_photos:
+                        # Sort by total resolution (width * height) descending
+                        good_photos.sort(key=lambda p: p.get("widthPx", 0) * p.get("heightPx", 0), reverse=True)
+                        best_photo = good_photos[0]
+                        url = f"https://places.googleapis.com/v1/{best_photo['name']}/media?maxHeightPx=1080&maxWidthPx=1920&key={google_key}"
+                        
+                        hero_items.append({
+                            "title": title,
+                            "url": url
+                        })
+                        
+                        # Stop if we have 10 images
+                        if len(hero_items) >= 10:
+                            break
+                            
+                return hero_items
+        except Exception as e:
+            print(f"Google Places photo error: {e}")
+        return []
+
+    # Fallback to Unsplash
+    def fetch_unsplash_hero_items(search_query):
         if not unsplash_key: return []
         url = "https://api.unsplash.com/search/photos"
         headers = {"Authorization": f"Client-ID {unsplash_key}"}
         params = {
             "query": search_query,
             "orientation": "landscape",
-            "per_page": 10,
+            "per_page": 5,
             "order_by": "relevant"
         }
         try:
             resp = requests.get(url, headers=headers, params=params, timeout=8)
-            print(f"[Unsplash] Status: {resp.status_code} for query: '{search_query}'")
             if resp.status_code == 200:
-                data = resp.json()
-                results = data.get("results", [])
-                if len(results) > 0:
-                    good = [p for p in results if p.get("width", 0) >= 1280]
-                    photos = good if good else results
-                    return [p["urls"]["raw"] + "&w=1920&q=85&fit=crop" for p in photos[:5]]
-            return []
+                results = resp.json().get("results", [])
+                items = []
+                for p in results:
+                    desc = p.get("description") or p.get("alt_description") or "Beautiful Landscape"
+                    # clean up unsplash descriptions
+                    desc_clean = desc.title()
+                    if len(desc_clean) > 40:
+                        desc_clean = desc_clean[:37] + "..."
+                    items.append({
+                        "title": desc_clean,
+                        "url": p["urls"]["raw"] + "&w=1920&q=85&fit=crop"
+                    })
+                return items
         except Exception as e:
             print(f"[Unsplash] Exception: {e}")
         return []
 
-    def fetch_google_place_photo(search_query):
-        if not google_key: return []
-        url = "https://places.googleapis.com/v1/places:searchText"
-        headers = {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": google_key,
-            "X-Goog-FieldMask": "places.photos"
-        }
-        body = {
-            "textQuery": f"best tourist attractions in {search_query}", 
-            "maxResultCount": 5
-        }
-        try:
-            resp = requests.post(url, headers=headers, json=body, timeout=8)
-            if resp.status_code == 200:
-                data = resp.json()
-                urls = []
-                for place in data.get("places", []):
-                    good_photos = [
-                        p for p in place.get("photos", [])
-                        if p.get("widthPx", 0) >= 1280 and p.get("widthPx", 0) > p.get("heightPx", 0)
-                    ]
-                    for photo in good_photos[:2]:
-                        urls.append(f"https://places.googleapis.com/v1/{photo['name']}/media?maxHeightPx=1080&maxWidthPx=1920&key={google_key}")
-                return urls[:5]
-        except Exception as e:
-            print(f"Google Places photo error: {e}")
-        return []
+    hero_items = fetch_places_hero_items()
     
-    city = query.strip()
-    img_urls = fetch_image_unsplash(f"{city} landscape")
-
-    if not img_urls:
-        img_urls = fetch_image_unsplash(f"{city}")
-
-    if not img_urls:
-        import random
-        generic_queries = [
-            "beautiful nature landscape", 
-            "mountains landscape", 
-            "world famous city aerial"
-        ]
-        img_urls = fetch_image_unsplash(random.choice(generic_queries))
-
-    url = img_urls[0] if img_urls else None
-    return jsonify({"urls": img_urls, "url": url}), 200
+    if not hero_items:
+        hero_items = fetch_unsplash_hero_items(f"{query} landscape")
+        
+    if not hero_items:
+        hero_items = fetch_unsplash_hero_items("beautiful nature landscape")
+        
+    urls_only = [item["url"] for item in hero_items]
+    return jsonify({"hero_items": hero_items, "urls": urls_only, "url": urls_only[0] if urls_only else None}), 200
 
 @app.route("/api/discover", methods=["GET"])
 def get_discover_photos():

@@ -18,6 +18,7 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import publicAxios from "../publicAxios";
 import PlaceModal from "../components/PlaceModal";
 import FluidGradient from "../components/FluidGradient";
+import HeroCarousel from "../components/HeroCarousel";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -200,13 +201,21 @@ export default function Home() {
         return;
       }
 
-      axios.post('/api/hero-image', { query })
+      axios.post('/api/hero-image', { 
+        query, 
+        lat: currentCoords?.lat, 
+        lon: currentCoords?.lon 
+      })
         .then(res => {
-          if (res.data.urls && res.data.urls.length > 0) {
-            setHeroImgUrls(res.data.urls);
+          if (res.data.hero_items && res.data.hero_items.length > 0) {
+            setHeroImgUrls(res.data.hero_items);
+            setCurrentImgIndex(0);
+          } else if (res.data.urls && res.data.urls.length > 0) {
+            // Map plain urls to objects for backwards compatibility
+            setHeroImgUrls(res.data.urls.map(u => ({ url: u, title: 'Beautiful Destination' })));
             setCurrentImgIndex(0);
           } else if (res.data.url) {
-            setHeroImgUrls([res.data.url]);
+            setHeroImgUrls([{ url: res.data.url, title: 'Beautiful Destination' }]);
             setCurrentImgIndex(0);
           } else {
             setHeroImgUrls([]);
@@ -314,16 +323,55 @@ export default function Home() {
   // ── HERO SECTION ─────────────────────────────────────────────────────────
   const renderHero = () => (
     <div className="hero-section">
-      {/* Background image */}
-      {heroImgUrls.length > 0 && (
-        <img
-          key={heroImgUrls[currentImgIndex]} // force re-render for transition if needed, though CSS transition is better on opacity
-          className="hero-bg-img"
-          style={{ zIndex: 1, transition: 'opacity 1s ease-in-out' }}
-          src={heroImgUrls[currentImgIndex]}
-          alt={displayCity || 'Location'}
-          onError={e => { e.target.style.display = 'none'; }}
-        />
+      {/* Top Left Controls: Change Area & Location Name */}
+      {weather && currentCoords && !locationError && (
+        <div style={{
+          position: "fixed",
+          top: "1.5rem",
+          left: "12rem",
+          zIndex: 1000,
+          display: "flex",
+          alignItems: "center",
+          gap: "1.5rem",
+          pointerEvents: "none"
+        }}>
+          <button
+            className="hero-btn hero-btn-outline"
+            style={{
+              padding: "8px 16px",
+              fontSize: "0.85rem",
+              display: "flex",
+              alignItems: "center",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              backdropFilter: "blur(10px)",
+              pointerEvents: "auto",
+              transition: "background 0.3s"
+            }}
+            onClick={() => {
+              setUserCity(null);
+              setLocationError(true);
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+          >
+            <MapPin size={13} style={{ marginRight: 6 }} /> Change Area
+          </button>
+          
+          <div style={{
+            fontSize: "0.95rem",
+            fontWeight: "600",
+            letterSpacing: "0.15em",
+            color: "rgba(255,255,255,0.9)",
+            textTransform: "uppercase"
+          }}>
+            {displayCity || 'YOUR CITY'}
+          </div>
+        </div>
+      )}
+      {/* Background Carousel */}
+      {heroImgUrls.length > 0 && !locationError && (
+        <HeroCarousel items={heroImgUrls} currentIndex={currentImgIndex} />
       )}
       {/* Static gradient fallback bg */}
       <div style={{
@@ -331,24 +379,8 @@ export default function Home() {
         background: 'linear-gradient(135deg, #0d2240 0%, #071428 50%, #030b1a 100%)',
         zIndex: 0,
       }} />
-      {/* Gradient overlays */}
-      <div className="hero-gradient" style={{ zIndex: 2 }} />
-
-      {/* Decorative indicators (right side) */}
-      <div className="hero-indicators">
-        {heroImgUrls.length > 1 ? heroImgUrls.map((_, i) => (
-          <div 
-            key={i} 
-            className={`hero-indicator-num ${i === currentImgIndex ? 'active' : ''}`}
-            onClick={() => setCurrentImgIndex(i)}
-            style={{ cursor: 'pointer', transition: '0.3s' }}
-          >
-            {String(i + 1).padStart(2, '0')}
-          </div>
-        )) : null}
-        {heroImgUrls.length > 1 && <div className="hero-indicator-line" />}
-      </div>
-
+      {/* No extra gradient overlays or indicators here */}
+      
       {/* Content overlay */}
       {locationError ? (
         /* No location: show search UI */
@@ -423,48 +455,6 @@ export default function Home() {
           <div style={{ height: '20px', width: '120px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', marginBottom: '16px' }} />
           <div style={{ height: '80px', width: '400px', maxWidth: '80vw', background: 'rgba(255,255,255,0.08)', borderRadius: '8px', marginBottom: '20px' }} />
           <div style={{ height: '20px', width: '200px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px' }} />
-        </div>
-      ) : weather && currentCoords ? (
-        /* Has data: full hero */
-        <div className="hero-content" style={{ zIndex: 10 }}>
-          <div className="hero-eyebrow">
-            <MapPin size={12} /> Discover Destinations
-          </div>
-          <div
-            className="hero-city-name"
-            style={{ fontSize: getCityFontSize(displayCity || 'YOUR CITY') }}
-          >
-            {displayCity || 'YOUR CITY'}
-          </div>
-          <div className="hero-weather-row">
-            <span className="hero-temp">{Math.round(weather.main.temp)}°C</span>
-            <span style={{ width: '1px', height: '28px', background: 'rgba(255,255,255,0.15)' }} />
-            <span className="hero-weather-desc">{weather.weather[0].description}</span>
-            <span className="hero-weather-stat">
-              <Wind size={13} /> {Math.round(weather.wind.speed * 3.6)} km/h
-            </span>
-            <span className="hero-weather-stat">
-              <Droplets size={13} /> {weather.main.humidity}%
-            </span>
-          </div>
-          <div className="hero-actions">
-            <button
-              className="hero-btn hero-btn-outline"
-              onClick={() => {
-                setUserCity(null);
-                setLocationError(true);
-              }}
-            >
-              <MapPin size={13} style={{ marginRight: 4 }} /> Change Area
-            </button>
-            <button
-              className="hero-btn"
-              style={{ background: 'linear-gradient(135deg, var(--accent-blue), var(--accent-teal))', color: '#07111f' }}
-              onClick={() => document.getElementById('home-content')?.scrollIntoView({ behavior: 'smooth' })}
-            >
-              Explore ↓
-            </button>
-          </div>
         </div>
       ) : null}
 
