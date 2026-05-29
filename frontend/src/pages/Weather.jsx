@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useData } from "../DataContext";
 import { CloudLightning, CloudRain, Cloud, Sun, Snowflake, CloudFog, CloudDrizzle, Droplets, Wind, Sunrise, Sunset, AlertTriangle, CalendarDays, Clock } from "lucide-react";
-import WeatherEffects from "../components/WeatherEffects";
+
 
 
 const getWeatherIcon = (condition = "", size = 48) => {
@@ -83,8 +83,9 @@ export default function Weather() {
   const selectedDayForecast = selectedDate ? displayFullForecast.filter(f => f.dt_txt.startsWith(selectedDate)) : [];
 
   return (
+    <>
+
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px 24px", position: "relative" }}>
-      <WeatherEffects activeWeather={displayWeather} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "16px" }}>
         <h2 className="font-heading" style={{ margin: 0 }}>Weather Hub</h2>
         <form onSubmit={handleSearch} style={{ display: "flex", gap: "8px" }}>
@@ -192,5 +193,6 @@ export default function Weather() {
       )}
 
     </div>
+    </>
   );
 }

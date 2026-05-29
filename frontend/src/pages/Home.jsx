@@ -17,6 +17,7 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import publicAxios from "../publicAxios";
 import PlaceModal from "../components/PlaceModal";
+import FluidGradient from "../components/FluidGradient";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -480,6 +481,17 @@ export default function Home() {
   // ── MAIN RENDER ─────────────────────────────────────────────────────────
   return (
     <div>
+      <div className="fluid-background-container" style={{ position: "fixed" }}>
+        <FluidGradient 
+          color1="#0f172a" 
+          color2="#1e3a8a" 
+          color3="#0369a1" 
+          color4="#06b6d4"
+          opacity={0.8}
+          colorIntensity={0.6}
+        />
+        <div className="fluid-overlay" style={{ background: "rgba(4, 9, 20, 0.5)" }}></div>
+      </div>
       {renderHero()}
 
       {/* ── AI Discovery Section ─────────────────────────────────────────────────── */}
@@ -494,40 +506,54 @@ export default function Home() {
             </p>
           </div>
 
-            <div className="glass-card" style={{ padding: "32px" }}>
-              <div style={{ display: "flex", gap: "12px", marginBottom: "24px", overflowX: "auto", paddingBottom: "12px", scrollbarWidth: "thin" }}>
-                {["Any", "Cafe", "Restaurant", "Museum", "Park", "Shopping", "Nature", "Entertainment", "Heritage"].map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setSuggestCategory(cat)}
-                    className={`segmented-btn ${suggestCategory === cat ? "active" : ""}`}
-                    style={{ whiteSpace: "nowrap", padding: "10px 20px", borderRadius: "14px", fontSize: "0.9rem" }}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "24px" }}>
+            <div className="glass-card" style={{ padding: "32px", display: "grid", gridTemplateColumns: "340px 1fr", gap: "32px", alignItems: "start" }}>
+              
+              {/* Left Column: Categories */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <h3 style={{ margin: 0, fontSize: "1.1rem", color: "var(--accent-teal)" }}>Categories</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  {["Any", "Cafe", "Restaurant", "Museum", "Park", "Shopping", "Nature", "Entertainment", "Heritage"].map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setSuggestCategory(cat)}
+                      className={`segmented-btn ${suggestCategory === cat ? "active" : ""}`}
+                      style={{ 
+                        whiteSpace: "nowrap", padding: "12px 14px", borderRadius: "30px", 
+                        fontSize: "0.85rem", justifyContent: "center", 
+                        border: suggestCategory === cat ? "1px solid var(--accent-teal)" : "1px solid rgba(255,255,255,0.1)"
+                      }}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
                 <button 
                   onClick={handleSuggestPlaces}
                   disabled={suggestLoading}
-                  style={{ padding: "12px 24px", background: "linear-gradient(135deg, var(--accent-blue), var(--accent-teal))", border: "none", borderRadius: "12px", color: "#fff", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
+                  style={{ 
+                    marginTop: "12px", padding: "16px 24px", 
+                    background: "linear-gradient(135deg, var(--accent-blue), var(--accent-teal))", 
+                    border: "none", borderRadius: "30px", color: "#fff", 
+                    fontWeight: "700", cursor: "pointer", display: "flex", 
+                    alignItems: "center", justifyContent: "center", gap: "8px", width: "100%" 
+                  }}
                 >
                   {suggestLoading ? <span className="spinner" style={{ width: "18px", height: "18px" }} /> : <Sparkles size={18} />} 
                   Find Top 3
                 </button>
               </div>
 
-              {suggestResults.length > 0 ? (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "24px" }}>
-                  {suggestResults.map((p, i) => (
+              {/* Right Column: Results */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px", minWidth: 0 }}>
+                {suggestResults.length > 0 ? (
+                  suggestResults.map((p, i) => (
                     <div 
                       key={i} 
                       className="glass-card shimmer-glass suggest-card" 
-                      style={{ overflow: "hidden", padding: 0, cursor: "pointer", transition: "transform 0.2s", display: "flex", flexDirection: "column" }}
+                      style={{ overflow: "hidden", padding: 0, cursor: "pointer", transition: "transform 0.2s", display: "flex", flexDirection: "row", height: "135px" }}
                       onClick={() => setSelectedPlace(p)}
                     >
-                      <div style={{ height: "180px", background: "#111", position: "relative" }}>
+                      <div style={{ width: "140px", background: "#111", position: "relative", flexShrink: 0 }}>
                         {p.photoUrl ? (
                           <img src={p.photoUrl} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                         ) : (
@@ -535,37 +561,39 @@ export default function Home() {
                             <MapPin size={32} color="rgba(255,255,255,0.2)" />
                           </div>
                         )}
-                        <div style={{ position: "absolute", bottom: "10px", right: "10px", background: "rgba(0,0,0,0.6)", padding: "4px 8px", borderRadius: "8px", fontSize: "0.75rem", fontWeight: "700", color: "#fff", backdropFilter: "blur(4px)" }}>
+                        <div style={{ position: "absolute", top: "8px", left: "8px", background: "rgba(0,0,0,0.6)", padding: "4px 8px", borderRadius: "8px", fontSize: "0.7rem", fontWeight: "700", color: "#fff", backdropFilter: "blur(4px)" }}>
                           Top {i + 1}
                         </div>
                       </div>
-                      <div style={{ padding: "20px", flex: 1, display: "flex", flexDirection: "column" }}>
-                        <div style={{ fontSize: "0.75rem", color: "var(--accent-teal)", fontWeight: "700", textTransform: "uppercase", marginBottom: "8px" }}>{p.category}</div>
-                        <h3 style={{ margin: "0 0 8px", fontSize: "1.2rem", fontWeight: "700", color: "#fff" }}>{p.name}</h3>
-                        <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.address}</p>
+                      <div style={{ padding: "12px 16px", flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "4px" }}>
+                          <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: "700", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</h3>
+                          <div style={{ fontSize: "0.7rem", color: "var(--accent-teal)", fontWeight: "700", textTransform: "uppercase", flexShrink: 0, marginLeft: "12px" }}>{p.category}</div>
+                        </div>
+                        <p style={{ margin: "0 0 6px", fontSize: "0.8rem", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.address}</p>
                         {p.rating && (
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "12px", fontSize: "0.85rem", marginBottom: "16px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", marginBottom: "8px" }}>
                             <span style={{ color: "var(--accent-gold)" }}>★</span> {p.rating} ({p.ratingCount} reviews)
                           </div>
                         )}
                         
-                        <div style={{ marginTop: "auto", background: "rgba(20,184,166,0.1)", border: "1px solid rgba(20,184,166,0.2)", borderRadius: "12px", padding: "12px", fontSize: "0.85rem", color: "#cbd5e1" }}>
-                          <strong style={{ color: "var(--accent-teal)", display: "block", marginBottom: "4px", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Why Suggested?</strong>
-                          {p.whySuggested || (p.matchReasons && p.matchReasons.length > 0 ? p.matchReasons[0] : `A highly-rated ${p.category || 'destination'} nearby that matches your preferences.`)}
+                        <div style={{ marginTop: "auto", fontSize: "0.8rem", color: "#cbd5e1", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          <strong style={{ color: "var(--accent-teal)", marginRight: "6px" }}>Why Suggested?</strong>
+                          {p.whySuggested || (p.matchReasons && p.matchReasons.length > 0 ? p.matchReasons[0] : `A highly-rated ${p.category || 'destination'} nearby.`)}
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ textAlign: "center", padding: "48px 20px", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: "16px", background: "rgba(0,0,0,0.2)" }}>
-                  <Compass size={48} color="var(--accent-blue)" style={{ opacity: 0.5, marginBottom: "16px" }} />
-                  <h3 style={{ margin: "0 0 8px", color: "#e2e8f0", fontSize: "1.2rem" }}>Ready to Explore?</h3>
-                  <p style={{ color: "var(--text-muted)", maxWidth: "400px", margin: "0 auto", fontSize: "0.95rem" }}>
-                    Select a category above and tap <strong>Find Top 3</strong>. Our AI will analyze your location and find the best hidden gems near you.
-                  </p>
-                </div>
-              )}
+                  ))
+                ) : (
+                  <div style={{ textAlign: "center", padding: "48px 20px", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: "16px", background: "rgba(0,0,0,0.2)", height: "100%", minHeight: "300px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
+                    <Compass size={48} color="var(--accent-blue)" style={{ opacity: 0.5, marginBottom: "16px" }} />
+                    <h3 style={{ margin: "0 0 8px", color: "#e2e8f0", fontSize: "1.2rem" }}>Ready to Explore?</h3>
+                    <p style={{ color: "var(--text-muted)", maxWidth: "400px", margin: "0 auto", fontSize: "0.95rem" }}>
+                      Select a category and tap <strong>Find Top 3</strong>. Our AI will analyze your location and find the best hidden gems near you.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
 

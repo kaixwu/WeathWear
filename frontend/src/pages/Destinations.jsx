@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import PlaceModal from "../components/PlaceModal";
 
+
 const getLocalDateString = () => {
   const now = new Date();
   const y = now.getFullYear();
@@ -135,6 +136,7 @@ export default function Destinations() {
   // ── RENDER ───────────────────────────────────────────
   return (
     <div className="dest-page">
+
       {/* Page Header */}
       <div style={{ marginBottom: '32px', paddingTop: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

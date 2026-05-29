@@ -6,6 +6,7 @@ import { CalendarCheck, Zap, Trash2, ListTodo, Sparkles, Send, MapPin, Clock, Ca
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 
+
 export default function Planner() {
   const { token } = useAuth();
   const {
@@ -194,6 +195,7 @@ export default function Planner() {
 
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 24px 40px" }}>
+
       {/* ------ Header ------ */}
       <div style={{ marginBottom: "32px", display: "flex", alignItems: "center", gap: "12px" }}>
         <CalendarCheck size={32} color="var(--accent-blue)" />

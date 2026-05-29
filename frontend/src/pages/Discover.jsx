@@ -3,6 +3,7 @@ import axios from "axios";
 import { MapPin, Compass } from "lucide-react";
 import { useData } from "../DataContext";
 
+
 export default function Discover() {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,6 +28,7 @@ export default function Discover() {
 
   return (
     <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 24px 60px" }}>
+
       {/* Header */}
       <div style={{ padding: "20px 0 40px", textAlign: "center" }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "rgba(45, 212, 191, 0.1)", padding: "6px 16px", borderRadius: "20px", color: "var(--accent-teal)", fontSize: "0.85rem", fontWeight: "700", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "16px" }}>
