@@ -1,7 +1,26 @@
 import { useState } from "react";
 import { useData } from "../DataContext";
-import { CloudLightning, CloudRain, Cloud, Sun, Snowflake, CloudFog, CloudDrizzle, Droplets, Wind, Sunrise, Sunset, AlertTriangle, CalendarDays, Clock } from "lucide-react";
+import { CloudLightning, CloudRain, Cloud, Sun, Snowflake, CloudFog, CloudDrizzle, Droplets, Wind, Sunrise, Sunset, AlertTriangle, CalendarDays, Clock, Map as MapIcon, Layers } from "lucide-react";
 import FluidGradient from "../components/FluidGradient";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
+  shadowUrl: markerShadow,
+});
+
+function MapFlyTo({ center }) {
+  const map = useMap();
+  map.flyTo(center, 10, { duration: 1.5 });
+  return null;
+}
 
 
 const getWeatherIcon = (condition = "", size = 48) => {
@@ -18,6 +37,7 @@ const getWeatherIcon = (condition = "", size = 48) => {
 export default function Weather() {
   const { weather: contextWeather, city: contextCity, forecast: contextForecast, fullForecast: contextFullForecast, disasters, locationError, loading, userCity } = useData();
   const [selectedDate, setSelectedDate] = useState(null);
+  const [activeLayer, setActiveLayer] = useState('precipitation_new');
   
   // Local state for searched weather
   const [searchCity, setSearchCity] = useState("");
@@ -201,6 +221,139 @@ export default function Weather() {
           </div>
         </div>
       )}
+
+      {/* Interactive Weather Map Section */}
+      <div className="glass-card" style={{ padding: "24px", marginBottom: "32px", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
+          <MapIcon size={24} color="var(--accent-blue)" />
+          <h3 className="font-heading" style={{ margin: 0, fontSize: "1.4rem" }}>Interactive Weather Map</h3>
+        </div>
+        
+        {/* Animated Map Controls */}
+        <div style={{ display: "flex", gap: "12px", marginBottom: "20px", overflowX: "auto", paddingBottom: "8px", msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+          <button 
+            onClick={() => setActiveLayer('none')}
+            style={{ 
+              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)", 
+              padding: "10px 18px", 
+              borderRadius: "30px", 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "8px", 
+              whiteSpace: "nowrap",
+              cursor: "pointer",
+              background: activeLayer === 'none' ? "rgba(56, 189, 248, 0.15)" : "rgba(255, 255, 255, 0.05)",
+              border: activeLayer === 'none' ? "1px solid var(--accent-blue)" : "1px solid rgba(255,255,255,0.1)",
+              color: activeLayer === 'none' ? "var(--accent-blue)" : "#e2e8f0",
+              fontWeight: activeLayer === 'none' ? "600" : "400",
+              transform: activeLayer === 'none' ? "scale(1.05)" : "scale(1)"
+            }}
+          >
+            <MapIcon size={16} /> Default Map
+          </button>
+          <button 
+            onClick={() => setActiveLayer('precipitation_new')}
+            style={{ 
+              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)", 
+              padding: "10px 18px", 
+              borderRadius: "30px", 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "8px", 
+              whiteSpace: "nowrap",
+              cursor: "pointer",
+              background: activeLayer === 'precipitation_new' ? "rgba(96, 165, 250, 0.15)" : "rgba(255, 255, 255, 0.05)",
+              border: activeLayer === 'precipitation_new' ? "1px solid #60a5fa" : "1px solid rgba(255,255,255,0.1)",
+              color: activeLayer === 'precipitation_new' ? "#60a5fa" : "#e2e8f0",
+              fontWeight: activeLayer === 'precipitation_new' ? "600" : "400",
+              transform: activeLayer === 'precipitation_new' ? "scale(1.05)" : "scale(1)"
+            }}
+          >
+            <CloudRain size={16} /> Rain Radar
+          </button>
+          <button 
+            onClick={() => setActiveLayer('temp_new')}
+            style={{ 
+              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)", 
+              padding: "10px 18px", 
+              borderRadius: "30px", 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "8px", 
+              whiteSpace: "nowrap",
+              cursor: "pointer",
+              background: activeLayer === 'temp_new' ? "rgba(248, 113, 113, 0.15)" : "rgba(255, 255, 255, 0.05)",
+              border: activeLayer === 'temp_new' ? "1px solid #f87171" : "1px solid rgba(255,255,255,0.1)",
+              color: activeLayer === 'temp_new' ? "#f87171" : "#e2e8f0",
+              fontWeight: activeLayer === 'temp_new' ? "600" : "400",
+              transform: activeLayer === 'temp_new' ? "scale(1.05)" : "scale(1)"
+            }}
+          >
+            <Sun size={16} /> Temperature Heatmap
+          </button>
+          <button 
+            onClick={() => setActiveLayer('wind_new')}
+            style={{ 
+              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)", 
+              padding: "10px 18px", 
+              borderRadius: "30px", 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "8px", 
+              whiteSpace: "nowrap",
+              cursor: "pointer",
+              background: activeLayer === 'wind_new' ? "rgba(148, 163, 184, 0.15)" : "rgba(255, 255, 255, 0.05)",
+              border: activeLayer === 'wind_new' ? "1px solid #94a3b8" : "1px solid rgba(255,255,255,0.1)",
+              color: activeLayer === 'wind_new' ? "#94a3b8" : "#e2e8f0",
+              fontWeight: activeLayer === 'wind_new' ? "600" : "400",
+              transform: activeLayer === 'wind_new' ? "scale(1.05)" : "scale(1)"
+            }}
+          >
+            <Wind size={16} /> Wind Speed
+          </button>
+        </div>
+
+        {/* Map Container */}
+        <div style={{ height: "450px", width: "100%", borderRadius: "12px", overflow: "hidden", position: "relative", border: "1px solid rgba(255,255,255,0.1)" }}>
+          {displayWeather?.coord ? (
+            <MapContainer
+              center={[displayWeather.coord.lat, displayWeather.coord.lon]}
+              zoom={10}
+              style={{ height: '100%', width: '100%', zIndex: 1 }}
+              zoomControl={false}
+            >
+              <MapFlyTo center={[displayWeather.coord.lat, displayWeather.coord.lon]} />
+              
+              {/* Base Map (Dark theme CartoDB) */}
+              <TileLayer
+                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+              />
+              
+              {/* OWM Weather Overlays */}
+              {activeLayer !== 'none' && (
+                <TileLayer
+                  key={activeLayer}
+                  url={`https://tile.openweathermap.org/map/${activeLayer}/{z}/{x}/{y}.png?appid=${import.meta.env.VITE_WEATHER_API_KEY}`}
+                  opacity={0.65}
+                  attribution='&copy; OpenWeatherMap'
+                />
+              )}
+
+              <Marker position={[displayWeather.coord.lat, displayWeather.coord.lon]}>
+                <Popup>
+                  <strong style={{ color: "#0f172a" }}>{displayWeather.name}</strong><br/>
+                  <span style={{ color: "#475569" }}>{Math.round(displayWeather.main.temp)}°C, {displayWeather.weather[0].description}</span>
+                </Popup>
+              </Marker>
+            </MapContainer>
+          ) : (
+            <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)" }}>
+              Location data not available
+            </div>
+          )}
+        </div>
+      </div>
 
     </div>
     </>
